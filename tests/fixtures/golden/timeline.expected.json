@@ -1,0 +1,294 @@
+{
+ "fps": "25",
+ "size": [
+  640,
+  360
+ ],
+ "frames": 566,
+ "segments": [
+  {
+   "clip": "c1",
+   "sec": "S1",
+   "src": "A",
+   "in": 1.9,
+   "n": 60,
+   "room": [
+    1.9,
+    0.67
+   ],
+   "words": [
+    0,
+    6
+   ],
+   "kept": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "id": 1,
+   "rec": 0
+  },
+  {
+   "clip": "c1",
+   "sec": "S1",
+   "src": "A",
+   "in": 5.55,
+   "n": 83,
+   "room": [
+    0.4,
+    0.96
+   ],
+   "words": [
+    8,
+    16
+   ],
+   "kept": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "join": {
+    "class": "sentence",
+    "kept": 0.38,
+    "room": 0.0,
+    "min": 0.28,
+    "target": 0.38
+   },
+   "id": 2,
+   "rec": 60
+  },
+  {
+   "clip": "c2",
+   "sec": "S2",
+   "src": "A",
+   "in": 15.475,
+   "n": 137,
+   "room": [
+    0.695,
+    1.005
+   ],
+   "words": [
+    24,
+    34
+   ],
+   "kept": [
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ],
+   "join": {
+    "class": "section",
+    "kept": 0.75,
+    "room": 0.0,
+    "min": 0.55,
+    "target": 0.75
+   },
+   "id": 3,
+   "rec": 143
+  },
+  {
+   "clip": "c3",
+   "sec": "S3",
+   "src": "A",
+   "in": 21.485,
+   "n": 98,
+   "room": [
+    1.035,
+    0.655
+   ],
+   "words": [
+    35,
+    43
+   ],
+   "kept": [
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43
+   ],
+   "join": {
+    "class": "section",
+    "kept": 0.75,
+    "room": 0.0,
+    "min": 0.55,
+    "target": 0.75
+   },
+   "id": 4,
+   "rec": 280
+  },
+  {
+   "clip": "c4",
+   "sec": "S4",
+   "src": "A",
+   "in": 27.635,
+   "n": 145,
+   "room": [
+    1.045,
+    1.105
+   ],
+   "words": [
+    46,
+    62
+   ],
+   "kept": [
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62
+   ],
+   "join": {
+    "class": "section",
+    "kept": 0.75,
+    "room": 0.0,
+    "min": 0.55,
+    "target": 0.75
+   },
+   "id": 5,
+   "rec": 378
+  },
+  {
+   "clip": "c5",
+   "sec": "S5",
+   "src": "A",
+   "in": 37.835,
+   "n": 43,
+   "room": [
+    1.035,
+    3.365
+   ],
+   "words": [
+    70,
+    74
+   ],
+   "kept": [
+    70,
+    71,
+    72,
+    73,
+    74
+   ],
+   "join": {
+    "class": "section",
+    "kept": 0.75,
+    "room": 0.0,
+    "min": 0.55,
+    "target": 0.75
+   },
+   "id": 6,
+   "rec": 523
+  }
+ ],
+ "overlays": [
+  {
+   "id": "b1",
+   "src": "B",
+   "in": 2.0,
+   "n": 75,
+   "rec": 222,
+   "gain_db": -18,
+   "over": "c2"
+  }
+ ],
+ "texts": [],
+ "shots": [],
+ "sections": [
+  {
+   "id": "S1",
+   "title": "What a saga is",
+   "rec": 0,
+   "n": 143
+  },
+  {
+   "id": "S2",
+   "title": "Why it's hard",
+   "rec": 143,
+   "n": 137
+  },
+  {
+   "id": "S3",
+   "title": "The contract",
+   "rec": 280,
+   "n": 98
+  },
+  {
+   "id": "S4",
+   "title": "En español",
+   "rec": 378,
+   "n": 145
+  },
+  {
+   "id": "S5",
+   "title": "Outro",
+   "rec": 523,
+   "n": 43
+  }
+ ],
+ "reorders": [],
+ "justified": {},
+ "locked": [],
+ "markers": [
+  {
+   "rec": 292,
+   "kind": "highlight",
+   "note": "I'd potency is not optional. It is the contract."
+  },
+  {
+   "rec": 378,
+   "kind": "uncertain",
+   "note": "does the Spanish recap belong in an English video?"
+  },
+  {
+   "rec": 523,
+   "kind": "note",
+   "note": "aquí va el diagrama."
+  }
+ ],
+ "stats": {
+  "fillers": 1,
+  "voiced": 0,
+  "pauses": 0,
+  "joins": {
+   "sentence": 1,
+   "section": 4
+  },
+  "segments": 6,
+  "seconds": 22.64
+ },
+ "warnings": []
+}

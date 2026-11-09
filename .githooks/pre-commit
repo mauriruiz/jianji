@@ -1,0 +1,4 @@
+#!/bin/sh
+# Leak guard on the staged files, then the fast suite (no models, about a minute).
+.githooks/leakcheck staged || exit 1
+exec uv run --quiet pytest -q -p no:warnings

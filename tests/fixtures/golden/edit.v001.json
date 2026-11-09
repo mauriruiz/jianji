@@ -1,0 +1,23 @@
+{
+ "v": 1,
+ "profile": "explainer",
+ "sections": [
+  {"id": "S1", "title": "What a saga is", "why": "open on the topic"},
+  {"id": "S2", "title": "Why it's hard", "why": "clean take after the RETAKE cue"},
+  {"id": "S3", "title": "The contract", "why": "MARK highlight"},
+  {"id": "S4", "title": "En español", "why": "bilingual recap"},
+  {"id": "S5", "title": "Outro", "why": "close"}
+ ],
+ "clips": [
+  {"id": "c1", "sec": "S1", "src": "A", "from": 0, "to": 16, "why": "intro; filler 7 auto-cut", "conf": 0.9},
+  {"id": "c2", "sec": "S2", "src": "A", "from": 24, "to": 34, "why": "last attempt after retake", "conf": 0.95},
+  {"id": "c3", "sec": "S3", "src": "A", "from": 35, "to": 43, "why": "marked highlight", "conf": 0.95},
+  {"id": "c4", "sec": "S4", "src": "A", "from": 46, "to": 62, "why": "Spanish recap", "conf": 0.9},
+  {"id": "c5", "sec": "S5", "src": "A", "from": 70, "to": 74, "why": "closing line", "conf": 0.9}
+ ],
+ "overlays": [
+  {"id": "b1", "src": "B", "in": 2.0, "out": 5.0, "over": "c2", "word": 29, "gain_db": -18,
+   "why": "illustrate 'every service owns its own data'; runs across the cut into S3"}
+ ],
+ "markers": [{"at": "c4", "kind": "uncertain", "note": "does the Spanish recap belong in an English video?"}]
+}

@@ -1,0 +1,41 @@
+#!/bin/sh
+# Leak guard: nothing personal reaches this public repo. `leakcheck` checks the staged files, `leakcheck all` every
+# tracked file. Fails on home-folder paths, e-mails other than example/noreply ones, any whole-word term from your
+# private denylist (~/.config/jianji/denylist.txt, one per line, case-insensitive; it never enters this repo), and
+# secrets (gitleaks, when installed).
+set -u
+mode=${1:-staged}
+deny="${JIANJI_HOME:-$HOME/.config/jianji}/denylist.txt"
+terms=$(mktemp)
+trap 'rm -f "$terms"' EXIT
+if [ -f "$deny" ]; then
+  grep -v -E '^[[:space:]]*(#|$)' "$deny" > "$terms"
+else
+  echo "leakcheck: no $deny, generic checks only" >&2
+fi
+if [ "$mode" = all ]; then list() { git ls-files; }; show() { cat "$1"; }
+else list() { git diff --cached --name-only --diff-filter=ACMR; }; show() { git show ":$1"; }; fi
+bad=0
+tmp=$(mktemp)
+list | while IFS= read -r f; do
+  case "$f" in *.mp4|*.npy|*.png|*.jpg|*.onnx|uv.lock) continue ;; esac
+  show "$f" > "$tmp" 2>/dev/null || continue
+  hits=$( { grep -n -E '/(Users|home)/[A-Za-z0-9._-]+/' "$tmp"
+            grep -n -o -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}' "$tmp" |
+              grep -v -i -E '@(example\.(com|org|net)|users\.noreply\.github\.com)$'
+            [ -s "$terms" ] && grep -n -i -w -F -f "$terms" "$tmp"; } | cut -c1-160)
+  if [ -n "$hits" ]; then
+    echo "leakcheck: $f" >&2
+    echo "$hits" | sed 's/^/  /' >&2
+    echo x
+  fi
+done > "$tmp.bad"
+[ -s "$tmp.bad" ] && bad=1
+rm -f "$tmp" "$tmp.bad"
+if command -v gitleaks >/dev/null 2>&1; then
+  if [ "$mode" = all ]; then gitleaks dir --no-banner --redact . >/dev/null 2>&1 || { gitleaks dir --no-banner --redact . >&2; bad=1; }
+  else gitleaks git --pre-commit --staged --no-banner --redact . >/dev/null 2>&1 || { gitleaks git --pre-commit --staged --no-banner --redact . >&2; bad=1; }; fi
+else
+  echo "leakcheck: gitleaks not installed (brew install gitleaks), secrets not scanned" >&2
+fi
+[ "$bad" = 0 ] || { echo "leakcheck: blocked. Remove it, or if it's a false alarm, reword or adjust your denylist." >&2; exit 1; }

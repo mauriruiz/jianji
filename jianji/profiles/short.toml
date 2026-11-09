@@ -1,0 +1,103 @@
+# Short: vertical 9:16, 30-60 s clip. Picture-led: built on a voice-over or, with none, on the
+# footage's own sound plus on-screen texts. Seconds unless noted; sizes and margins are fractions of the frame
+# height. Overrides as in explainer.toml.
+
+[timeline]
+size = [1080, 1920]        # 9:16 whatever the sources are; compile falls back to the first clip otherwise
+fps = "30/1"
+
+[asr]
+model = "mlx-community/whisper-large-v3-turbo"
+languages = ["en"]         # spoken languages (two-letter codes); with several, LID picks per stretch. Brief: language: en, es
+chunk_max = 12.0           # VAD chunk length cap; shorter = finer language switching
+lid_retry_below = 0.75     # transcribe in both languages when LID confidence is lower
+
+[cut]                      # fast pace, but never without air: cuts landing right on the voice sound rushed
+breathing = "natural"      # tight | natural | relaxed: scales every gap below by 0.75 / 1 / 1.3
+gap_intra = [0.08, 0.12, 0.16]     # [min, target, max] s kept at a cut inside a sentence
+gap_sentence = [0.22, 0.30, 0.40]  # between sentences
+gap_section = [0.40, 0.55, 0.75]   # between sections
+max_pause = 0.35           # a natural pause longer than this becomes a cut, and keeps its class's gap
+tail_db = 6                # out-point: last word decays to the noise floor + this (dB)...
+tail_margin = 0.04         # ...plus this
+onset_margin = 0.03        # in-point this far before the first word's onset
+breath = 0.3               # an inhale this close before a sentence's first word is kept
+max_room = 0.25            # most room tone created where the speaker runs on
+min_segment = 0.5          # words span (s) under which a filler or pause (<= 1 s) cut is undone: no slivers
+finish_max = 1.5           # a clip that stops mid-sentence runs on this far (s) to finish it ("eh", "vale" included)
+boundary_gap = 0.12        # a clause/sentence end counts only with this much audible pause after it (s)
+auto_cut = ["filler"]
+
+[render]
+master_codec = "hevc_videotoolbox"
+master_quality = 65
+audio_rate = 48000
+xfade_frames = 2
+loudness = -14.0
+true_peak = -1.0
+review_height = 960        # at 540 a vertical review is 304 px wide
+burn_captions = true       # final.vNNN.mp4 (the upload file) has the captions burned in with the texts
+
+# Keep-clear margins at 1080x1920, the union of TikTok (top 220, bottom 480, left 60, right 140) and Instagram
+# Reels / Meta (top 270, bottom 670 = 35%, left 65, right 120). Third-party guides, checked 2026-11-06; neither
+# platform publishes official pixel values. QA measures every burned text box against this; the review render
+# draws it as a faint frame.
+[safe_zone]
+size = [1080, 1920]
+top = 270
+bottom = 670
+left = 65
+right = 150
+
+# Margins are fractions of the frame height. Captions sit just above the bottom zone (0.36 x 1920 = 691 px),
+# texts just below the top zone (0.15 x 1920 = 288 px), 20 px inside the side zones.
+[captions]
+max_chars = 26             # two lines at this size; 18 gave 0.2 s cues nobody can read
+line_chars = 17            # one line at 88 px between the side margins; longer cues wrap to two balanced lines
+min_dur = 0.7
+max_dur = 2.0
+break_gap = 0.4
+font = "Helvetica Neue"
+bold = true
+size = 0.046
+outline = 0.004
+align = 2                  # ASS numpad: 2 bottom-centre
+margin_v = 0.36
+margin_l = 0.044
+margin_r = 0.089
+
+[texts]                    # on-screen story lines ("style": "txt") and place/price callouts ("style": "hi")
+font = "Helvetica Neue"
+size = 0.046
+outline = 0.005
+line_chars = 17
+align = 8                  # top-centre, above faces (0.20 sat on foreheads)
+margin_v = 0.15
+margin_l = 0.044
+margin_r = 0.089
+hi_align = 8               # callouts: black on a yellow box, upper middle, clear of two-line captions
+hi_margin_v = 0.27         # 518 px from the top: below a two-line story text, above the captions
+hi_colour = "&H0000D7FF"   # ASS &HAABBGGRR
+min_dur = 1.5              # s: every text stays up at least this long...
+read_lead = 0.4            # ...and at least this + its characters / read_cps (subtitles read at ~17 chars/s;
+read_cps = 13              # our texts compete with the picture and the captions)
+max_dur = 4.5              # a text needing longer is too long: shorten the words, not the time
+
+[shots]                    # least time on screen per picture shot (B-roll, picture-led clips), by type: the edit
+place = 2.0                # labels each one ("shot"); establishing: facade, counter, sign, street
+detail = 1.2               # a product, a dish, a detail
+action = 1.2               # mixing, pouring, a cheese pull: also held until the motion settles...
+reaction = 1.2             # ...and so is a reaction: the whole of it
+settle_max = 1.5           # s past the planned out-point, at most, looking for that end
+min_visible = 1.0          # nothing on screen shorter than this (s), talking head included: B-roll stretches over a flash
+
+[broll]
+vlm = true
+vlm_model = "mlx-community/Qwen3-VL-8B-Instruct-4bit"
+sheet_frames = 16
+
+[edit]
+outline_checkpoint = false
+
+[disk]
+min_free_gb = 20

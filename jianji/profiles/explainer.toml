@@ -1,0 +1,72 @@
+# Explainer: talking head, natural but concise. Seconds unless noted.
+# Override any key in ~/.config/jianji (profiles/, brand.toml, [defaults] in config.toml), <video>/jianji/config.toml
+# or brief.md front matter as section.key: value.
+
+[asr]
+model = "mlx-community/whisper-large-v3-turbo"
+languages = ["en"]         # spoken languages (two-letter codes); with several, LID picks per stretch. Brief: language: en, es
+chunk_max = 12.0           # VAD chunk length cap; shorter = finer language switching
+lid_retry_below = 0.75     # transcribe in both languages when LID confidence is lower
+
+[cut]
+# Breathing room at every cut: the silence kept between the last word before it and the first word after it,
+# by what the cut separates. [min, target, max] seconds. Starting values, to tune on real footage.
+breathing = "natural"      # tight | natural | relaxed: scales every gap below by 0.75 / 1 / 1.3
+gap_intra = [0.10, 0.15, 0.20]     # inside a sentence (a removed filler or false start)
+gap_sentence = [0.28, 0.38, 0.48]  # between sentences
+gap_section = [0.55, 0.75, 0.95]   # between sections of the edit plan
+max_pause = 0.8            # a natural pause longer than this becomes a cut, and keeps its class's gap
+tail_db = 6                # an out-point waits until the last word decays to the noise floor + this (dB)
+tail_margin = 0.04         # ...plus this
+onset_margin = 0.03        # in-points start this far before the first word's onset
+breath = 0.4               # an inhale this close before a sentence's first word is kept
+max_room = 0.35            # most room tone created where the speaker leaves no pause; a section that needs
+                           # more should get a B-roll beat (compile warns)
+min_segment = 0.5          # words span (s) under which a filler or pause (<= 1 s) cut is undone: no slivers
+finish_max = 1.5           # a clip that stops mid-sentence runs on this far (s) to finish it ("eh", "vale" included)
+boundary_gap = 0.12        # a clause/sentence end counts only with this much audible pause after it (s)
+# "filler": hesitation words. "voiced": untranscribed vocal sounds between words; off until it's proven on
+# real café footage (on a noisy stream it fired on plain word gaps). Clips opt out with "keep": ["filler"|"pauses"].
+auto_cut = ["filler"]
+
+[render]
+burn_captions = false      # final.vNNN.mp4 (the upload file): texts burned in, captions ship as the SRT
+master_codec = "hevc_videotoolbox"
+master_quality = 65        # VideoToolbox -q:v (1-100)
+audio_rate = 48000
+xfade_frames = 2           # centered audio crossfade at every cut
+loudness = -14.0
+true_peak = -1.0
+review_height = 540
+
+[captions]
+max_chars = 42
+line_chars = 56            # one line fits 56 at 1/18 of 1080p; longer cues wrap to two balanced lines
+min_dur = 0.9
+max_dur = 3.2
+break_gap = 0.6
+
+[texts]                    # burned titles and lower thirds: reading time
+min_dur = 1.5              # s: every text stays up at least this long...
+read_lead = 0.4            # ...and at least this + its characters / read_cps (subtitles read at ~17 chars/s;
+read_cps = 13              # our texts compete with the picture and the captions)
+max_dur = 4.5              # a text needing longer is too long: shorten the words, not the time
+
+[shots]                    # least time on screen per picture shot (B-roll, picture-led clips), by type: the edit
+place = 2.0                # labels each one ("shot"); establishing: facade, counter, sign, street
+detail = 1.2               # a product, a dish, a detail
+action = 1.2               # mixing, pouring, a cheese pull: also held until the motion settles...
+reaction = 1.2             # ...and so is a reaction: the whole of it
+settle_max = 1.5           # s past the planned out-point, at most, looking for that end
+min_visible = 1.0          # nothing on screen shorter than this (s), talking head included: B-roll stretches over a flash
+
+[broll]
+vlm = true                 # first-pass descriptions of B-roll candidates with a local vision model
+vlm_model = "mlx-community/Qwen3-VL-8B-Instruct-4bit"
+sheet_frames = 16          # frames per contact sheet
+
+[edit]
+outline_checkpoint = false # true: write outline.md and stop for approval before cutting
+
+[disk]
+min_free_gb = 20

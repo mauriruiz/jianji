@@ -1,0 +1,25 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fast:
+    # The fast suite: no models (Whisper, aligners and the vision model need an Apple GPU and ~10 GB; run them
+    # locally with JIANJI_SLOW=1).
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tools
+        run: brew install ffmpeg-full gitleaks
+      - name: Leak guard
+        run: .githooks/leakcheck all
+      - name: Tests
+        run: |
+          uv sync
+          uv run pytest -q -p no:warnings

@@ -1,0 +1,34 @@
+[project]
+name = "jianji"
+version = "0.1.0"
+description = "Local-first first cuts for talking-head videos, shorts and streams: Claude Code edits, a deterministic CLI renders"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "mlx-whisper>=0.4.3",
+    "whispermlx>=3.14",
+    "silero-vad>=6.2",
+    "numpy",
+    "mlx-vlm>=0.7.12",
+]
+
+[project.scripts]
+jian = "jianji.cli:main"
+
+[project.urls]
+Repository = "https://github.com/mauriruiz/jianji"
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["models: loads the local models (Whisper, wav2vec2, vision); runs only with JIANJI_SLOW=1"]

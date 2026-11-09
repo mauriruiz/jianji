@@ -1,0 +1,5 @@
+#!/bin/sh
+# Leak guard on every tracked file, then the whole suite when the local models are already downloaded.
+.githooks/leakcheck all || exit 1
+[ -d "${HF_HOME:-$HOME/.cache/huggingface}/hub/models--mlx-community--whisper-large-v3-turbo" ] && export JIANJI_SLOW=1
+exec uv run --quiet pytest -q -p no:warnings
