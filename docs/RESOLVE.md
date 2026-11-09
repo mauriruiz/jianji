@@ -22,7 +22,9 @@ What you get:
 One-time, optional: Preferences > System > Media Storage, put a working folder of your choice first, so Resolve's
 cache and gallery don't fill your home folder.
 
-## Back
+## Back (experimental)
+
+Tested on jian's own FCPXML, not yet on a real export from Resolve: tell us how it goes.
 
 1. File > Export > Timeline… > "FCPXML 1.10", save into `jianji/resolve/from-resolve/`.
 2. If you edited captions: right-click the subtitle track > Export Subtitle… > SRT, same folder, same name.

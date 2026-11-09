@@ -2,6 +2,8 @@
 
 **剪辑 (jiǎnjí) means "video editing" in Chinese; `jian` (剪) means "to cut".**
 
+Built by [Mauri Ruiz](https://www.youtube.com/@mauri_ruiz) for his YouTube channel.
+
 > **Status: early alpha (v0.1).** Built for my own workflow on macOS / Apple Silicon. Expect rough edges;
 > [issues](https://github.com/mauriruiz/jianji/issues) welcome.
 
@@ -38,12 +40,13 @@ flowchart LR
 - **Claude edits, a deterministic CLI does the rest.** Claude reads compact text views (about 1 KB of transcript
   per minute of speech) and writes an edit that picks speech by word id, never by timestamp. The `jian` CLI turns
   that into frame-exact cuts, renders, and checks the result. The CLI never calls a language model.
-- **Cuts that sound natural.** Speech is cut only at clause or sentence ends, every cut keeps real silence from the
-  recording, fillers and retakes go, and nothing flashes on screen for under a second.
+- **Cuts that sound natural.** jianji aims to cut only at clause or sentence ends and keep real silence at every
+  cut, drop fillers and retakes, and never flash anything on screen for under a second; QA flags cuts that don't.
 - **QA on every render**: clipped words, cuts through speech, text over faces, captions, loudness, A/V sync, safe
   zones for shorts, secrets on screen for streams. `fail` means a confirmed problem.
-- **Resolve round trip**: every cut is also an FCPXML timeline on your original footage (the free edition works).
-  Edit it, export, and `jian pull` brings your changes back as the next version.
+- **Resolve round trip**: every cut is also an FCPXML timeline on your original footage; the import is tested on
+  Resolve 21.2 (free). Edit it, export, and `jian pull` brings your changes back as the next version. `jian pull` is
+  **experimental**: it's tested on jian's own FCPXML, not yet on a real export from Resolve.
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -66,13 +69,14 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 brew install uv ffmpeg-full
 xcode-select --install                      # if you don't have the command line tools yet
 git clone https://github.com/mauriruiz/jianji && cd jianji
-uv tool install --editable .                # puts `jian` on your PATH (~/.local/bin)
+uv tool install --editable .                # installs `jian` in ~/.local/bin
+uv tool update-shell                        # puts ~/.local/bin on your PATH; then open a new terminal
 mkdir -p ~/.claude/skills
 ln -s "$PWD/.claude/skills/jian-edit" "$PWD/.claude/skills/jian-revise" ~/.claude/skills/
 mkdir -p ~/.config/jianji
 printf 'schema = 1\nvideos_root = "~/Movies/jianji"\n' > ~/.config/jianji/config.toml
 mkdir -p ~/Movies/jianji
-jian doctor                                 # checks the install
+jian doctor                                 # checks the install (in the new terminal)
 ```
 
 Then, for each video:
@@ -176,3 +180,5 @@ restated in our own words.
 
 Apache-2.0. See [LICENSE](LICENSE), and [NOTICE](NOTICE) for the third-party software and models jianji uses but
 doesn't include.
+
+jianji is an independent project, not affiliated with Anthropic or Blackmagic Design.
