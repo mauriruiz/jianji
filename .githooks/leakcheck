@@ -1,8 +1,8 @@
 #!/bin/sh
 # Leak guard: nothing personal reaches this public repo. `leakcheck` checks the staged files, `leakcheck all` every
-# tracked file. Fails on home-folder paths, e-mails other than example/noreply ones, any whole-word term from your
-# private denylist (~/.config/jianji/denylist.txt, one per line, case-insensitive; it never enters this repo), and
-# secrets (gitleaks, when installed).
+# tracked file. Fails on home-folder paths; e-mails other than example.*, GitHub noreply and the maintainer's public
+# address; any whole-word term from your private denylist (~/.config/jianji/denylist.txt, one per line,
+# case-insensitive; it never enters this repo); and secrets (gitleaks, when installed).
 set -u
 mode=${1:-staged}
 deny="${JIANJI_HOME:-$HOME/.config/jianji}/denylist.txt"
@@ -21,8 +21,8 @@ list | while IFS= read -r f; do
   case "$f" in *.mp4|*.npy|*.png|*.jpg|*.onnx|uv.lock) continue ;; esac
   show "$f" > "$tmp" 2>/dev/null || continue
   hits=$( { grep -n -E '/(Users|home)/[A-Za-z0-9._-]+/' "$tmp"
-            grep -n -o -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}' "$tmp" |
-              grep -v -i -E '@(example\.(com|org|net)|users\.noreply\.github\.com)$'
+            grep -n -o -E '[A-Za-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}' "$tmp" |  # lowercase domain: not code
+              grep -v -i -E '(@(example\.(com|org|net)|users\.noreply\.github\.com)|(^|:)(noreply@github\.com|me@mauriruiz\.com))$'
             [ -s "$terms" ] && grep -n -i -w -F -f "$terms" "$tmp"; } | cut -c1-160)
   if [ -n "$hits" ]; then
     echo "leakcheck: $f" >&2
