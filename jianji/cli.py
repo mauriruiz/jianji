@@ -198,7 +198,7 @@ def run_qa_cmd(p: Project, v: int, tl: dict | None = None, sources: dict | None 
         res = run_qa(tl, sources, outs, Engine(p.cfg["asr"], p.cfg["glossary"]), p.cfg["captions"], p.cfg["render"],
                      zone=p.cfg.get("safe_zone"), reuse=reuse, cut=p.cfg["cut"], vision=frames,
                      texts=p.cfg.get("texts"), shots=p.cfg.get("shots"), ocr=words_on_screen,
-                     never=p.cfg.get("never_show"))
+                     never=p.cfg.get("never_show"), allow=(p.cfg.get("stream") or {}).get("allow_emails"))
     loud = (outs or {}).get("loudnorm_input") or (reuse or {}).get("loudnorm")
     if loud:  # the mix's measured loudness: `jian resolve` gives every clip the same gain the master got
         res["loudnorm"] = loud

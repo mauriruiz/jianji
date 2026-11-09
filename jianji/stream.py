@@ -21,7 +21,8 @@ APPS = (  # first match wins, on the words OCR reads in one frame
 )
 FILES = re.compile(r"\b[\w./-]+\.(?:rs|toml|md|ts|tsx|js|py|go|json|ya?ml|lua|gd|cs|cpp|h)\b")
 SECRETS = (
-    ("email", r"[\w.+-]+@[\w-]+\.[a-z]{2,}"),
+    # a lowercase domain and nothing code-like around it: OCR of code ("cfg.validate_x@Q.ie.ehcl:") isn't an address
+    ("email", r"(?<![\w.@])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,12}(?![\w(@])"),
     ("api key", r"\b(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|github_pat_\w{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[\w-]{10,}|"
                 r"AIza[\w-]{30,})"),
     ("token", r"\beyJ[\w-]{10,}\.[\w-]{10,}"),
@@ -48,14 +49,23 @@ def classify(lines: list[str]) -> str:
     return best if score[best] else "other"
 
 
-def private(lines: list[list], never: list[str]) -> list[tuple[str, str, list[float]]]:
-    """(kind, text, box) of every OCR line that may be private: secrets, an e-mail, a notification banner (top
-    right), or anything on the brief's never_show list."""
+def public_email(addr: str, allow: list[str]) -> bool:
+    """GitHub's noreply addresses (git log on screen) and the ones you list in `[stream] allow_emails`."""
+    a = addr.lower()
+    return a == "noreply@github.com" or a.endswith("@users.noreply.github.com") or a in {x.lower() for x in allow}
+
+
+def private(lines: list[list], never: list[str], allow: list[str] = ()) -> list[tuple[str, str, list[float]]]:
+    """(kind, text, box) of every OCR line that may be private: secrets, an e-mail (not an allowed one), a
+    notification banner (top right), or anything on the brief's never_show list."""
     out = []
     for ln in lines:
         text, box = ln[0], ln[1:5]
         for kind, rx in SECRETS:
-            if re.search(rx, text):
+            hits = [m.group(0) for m in re.finditer(rx, text)]
+            if kind == "email":
+                hits = [h for h in hits if not public_email(h, allow)]
+            if hits:
                 out.append((kind, text, box))
         if box[0] > 0.65 and box[3] < 0.25 and NOTIFY.search(text):
             out.append(("notification", text, box))
@@ -97,7 +107,7 @@ def stream_map(p: Project) -> Path:
     words = (read_json(_tr_path(p, sid, e)) or {}).get("words", [])
     shots = ocr(p, video, 1 / step, width=1600, fast=True)
     act = _activity(p, video, step)
-    never = p.cfg.get("never_show", [])
+    never, allow = p.cfg.get("never_show", []), p.cfg["stream"].get("allow_emails", [])
     bins = []
     for m in range(int(e["dur"] // 60) + 1):
         a, z = m * 60, (m + 1) * 60
@@ -114,7 +124,7 @@ def stream_map(p: Project) -> Path:
                      "said": " ".join(said[:16]), "cues": [c for c, rx in CUES if re.search(rx, text, re.I)],
                      "change": round(max((act[k][0] for k in ks if k < len(act)), default=0), 2),
                      "box": [round(float(np.median([b[i] for b in boxes])), 2) for i in range(4)] if boxes else None,
-                     "private": [(f["t"], *x) for f in fs for x in private(f["text"], never)]})
+                     "private": [(f["t"], *x) for f in fs for x in private(f["text"], never, allow)]})
     # the vision model at each change of what's on screen (capped): a first label for the span that starts there
     changes = [b for k, b in enumerate(bins) if k and b["screen"] != bins[k - 1]["screen"]][: int(cfg.get("vlm_keyframes", 24))]
     if p.cfg.get("broll", {}).get("vlm", True) and changes:

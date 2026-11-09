@@ -76,4 +76,5 @@ min_free_gb = 20
 map_step = 10              # s between the frames `jian map` reads (OCR, activity)
 vlm_keyframes = 24         # vision-model notes at the first N changes of what's on screen
 privacy_step = 2           # s between the frames QA reads on the cut for secrets and never_show
+allow_emails = []          # e-mails that may be on screen (your public one); GitHub noreply addresses always may
 bridge_speed = 8           # sped-up bridges over silent work ("speed" on a clip)

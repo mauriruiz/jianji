@@ -118,7 +118,7 @@ def safe_zone(boxes: list[tuple], size: list[int], zone: dict) -> list[tuple[flo
 def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, render_cfg: dict,
            zone: dict | None = None, reuse: dict | None = None, cut: dict | None = None,
            vision: list[dict] | None = None, texts: dict | None = None, shots: dict | None = None,
-           ocr: list[dict] | None = None, never: list[str] | None = None) -> dict:
+           ocr: list[dict] | None = None, never: list[str] | None = None, allow: list[str] | None = None) -> dict:
     """reuse: a previous QA result for a master with the same sound; its HEAVY checks are carried over.
     cut: the profile's [cut], for the breathing check. vision: faces/subject from vision.detect on the master.
     texts: the profile's [texts], for reading time. shots: its [shots], for least holds."""
@@ -298,7 +298,7 @@ def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, rend
     if ocr is not None:  # what the cut shows and says that shouldn't be public (streams: secrets, never_show)
         cur[0] = "privacy"
         from .stream import private
-        hits = [(f["t"], *x) for f in ocr for x in private(f["text"], never or [])]
+        hits = [(f["t"], *x) for f in ocr for x in private(f["text"], never or [], allow or [])]
         for t, kind, text, box in hits:
             issue(t, "fail", f"{kind} on screen: {text!r}: blur it, \"blur\": [[{', '.join(f'{v:.2f}' for v in box[:4])}]] "
                   "on the clip or B-roll under it (frame coordinates)")

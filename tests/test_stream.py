@@ -63,3 +63,16 @@ def test_picture_filter_speeds_zooms_and_blurs():
                         1920, 1080, "yuv420p")
     assert vf.startswith("setpts=PTS/8,fps=30,crop=iw*0.5000:ih*0.5000:iw*0.1000:ih*0.2000,scale=1920:1080")
     assert "crop=576:108:1344:0,boxblur" in vf and vf.endswith("overlay=1344:0,format=yuv420p")
+
+
+def test_emails_on_screen_tight_and_allowed():
+    """A real address on screen fails; OCR of code that looks like one doesn't (`cfg.validate_x@Q.ie.ehcl:`, a
+    decorator, a version pin), nor GitHub's noreply addresses in a git log, nor the addresses you allow."""
+    box = [0.1, 0.1, 0.4, 0.15, 0.9]
+    seen = lambda text, allow=(): [k for k, _, _ in private([[text, *box]], [], list(allow))]
+    assert seen("Author: Ana <ana@example.com>") == ["email"]
+    assert seen("let ok = cfg.validate_conti@Q.ie.ehcl:") == []
+    assert seen("@property def name(self):") == [] and seen("uses: actions/checkout@v4.2") == []
+    assert seen("Author: dev <123+dev@users.noreply.github.com>") == []
+    assert seen("contact me@example.org", ["Me@Example.org"]) == []
+    assert seen("me@example.org and boss@example.org", ["me@example.org"]) == ["email"]
