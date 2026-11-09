@@ -66,6 +66,7 @@ automatically; discourse words are the editor's call.
 
 Aligners: wav2vec2 base 960h for English; Apache-2.0 XLSR-53 models for Spanish, French, German and Italian (whispermlx's
 defaults for those are non-commercial). Each transcript records its aligner, and QA re-aligns with the same one.
+Every Hugging Face model is pinned to an exact commit and loaded as safetensors (`PINS` in `jianji/core.py`).
 
 ## 4. The edit file
 

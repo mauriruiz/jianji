@@ -82,3 +82,20 @@ def test_doctor_explains_a_layer_that_doesnt_match(home):
     assert "schema 99" in bad and "update jian" in bad
     assert "'cut.max_pausa' isn't a setting" in bad
     assert "profile 'podcast' has no style guide" in bad
+
+
+def test_models_download_pinned_and_without_pickles(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda repo, revision=None, ignore_patterns=None:
+                        calls.append((repo, revision, ignore_patterns)) or str(tmp_path))
+    core.model_path("jonatasgrosman/wav2vec2-large-xlsr-53-spanish")
+    core.model_path("someone/their-model@abc123")
+    core.model_path("someone/their-model")
+    (pinned, rev, ignore), mine, latest = calls
+    assert rev == core.PINS[pinned] and len(rev) == 40 and "*.bin" in ignore
+    assert mine == ("someone/their-model", "abc123", None) and latest == ("someone/their-model", None, None)
+    assert core.model_path(str(tmp_path)) == str(tmp_path) and len(calls) == 3, "a local folder is used as it is"
+    built_in = {core._toml(f).get(s, {}).get(k) for f in (core.PKG / "profiles").glob("*.toml")
+                for s, k in (("asr", "model"), ("broll", "vlm_model"))}
+    from jianji.transcribe import ALIGN
+    assert built_in | set(ALIGN.values()) <= set(core.PINS), "every model jian downloads by default is pinned"

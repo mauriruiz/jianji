@@ -13,7 +13,8 @@ is installed or downloaded by you under its own license.
   - Whisper large-v3-turbo (OpenAI, MIT), via mlx-community;
   - Qwen3-VL-8B-Instruct (Alibaba Qwen, Apache-2.0), via mlx-community;
   - wav2vec2 base 960h (Meta, MIT), via torchaudio, for English word alignment;
-  - jonatasgrosman/wav2vec2-large-xlsr-53-{spanish,french,german,italian} (Apache-2.0), for word alignment;
+  - jonatasgrosman/wav2vec2-large-xlsr-53-{spanish,french,german,italian} (Apache-2.0), for word alignment,
+    as Hugging Face's safetensors conversions;
   - Silero VAD (MIT).
 - Apple Vision, a macOS system framework.
 

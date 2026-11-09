@@ -59,8 +59,10 @@ class Vision:
         from mlx_vlm.prompt_utils import apply_chat_template
         from mlx_vlm.utils import load_config
         if self._m is None:
-            model, proc = load(self.model_id)
-            self._m = (model, proc, load_config(self.model_id))
+            from .core import model_path
+            path = model_path(self.model_id)
+            model, proc = load(path)
+            self._m = (model, proc, load_config(path))
         model, proc, cfg = self._m
         text = apply_chat_template(proc, cfg, prompt or PROMPT.format(n=n), num_images=1)
         out = generate(model, proc, text, [str(image)], max_tokens=220, temperature=0.0, verbose=False)

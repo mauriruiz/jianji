@@ -26,6 +26,32 @@ FFMPEG = str(_FULL / "ffmpeg") if (_FULL / "ffmpeg").exists() else "ffmpeg"
 FFPROBE = str(_FULL / "ffprobe") if (_FULL / "ffprobe").exists() else "ffprobe"
 
 
+# Model downloads at exact commits, safetensors only: a model repo changed or taken over later can't change what runs
+# here, and no pickle is ever loaded from them. The XLSR-53 aligners ship only a pickle on main; their safetensors are
+# Hugging Face's own conversions (SFconvertbot pull requests on those repos), pinned the same way.
+PINS = {
+    "mlx-community/whisper-large-v3-turbo": "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",
+    "mlx-community/Qwen3-VL-8B-Instruct-4bit": "defcdea7cc7a4b0858fea563cbbce171d328e457",
+    "jonatasgrosman/wav2vec2-large-xlsr-53-spanish": "80106547eee5065e01618d6588c22c256e8d0e70",  # refs/pr/3
+    "jonatasgrosman/wav2vec2-large-xlsr-53-french": "70db24a266633ffcc8edce4e72f3a5cb69d602d6",  # refs/pr/2
+    "jonatasgrosman/wav2vec2-large-xlsr-53-german": "d34ccf41b3e37252e6cfac0e53bb1727dc0524bb",  # refs/pr/2
+    "jonatasgrosman/wav2vec2-large-xlsr-53-italian": "de6aed5a086b6713798c76a93bc53c73ca1e02b6",  # refs/pr/1
+}
+PICKLES = ["*.bin", "*.pt", "*.pth", "*.ckpt", "*.pkl", "*.h5", "*.msgpack", "language_model/*"]
+
+
+def model_path(name: str) -> str:
+    """A Hugging Face model as a local folder: a pinned one at its commit, without pickles. Your own choice in a
+    profile can be pinned too, as `repo@commit`; an unpinned repo comes at its latest commit. A local folder is used
+    as it is."""
+    if Path(name).expanduser().is_dir():
+        return str(Path(name).expanduser())
+    from huggingface_hub import snapshot_download
+    repo, _, rev = name.partition("@")
+    pinned = rev or PINS.get(repo)
+    return snapshot_download(repo, revision=pinned, ignore_patterns=PICKLES if repo in PINS and not rev else None)
+
+
 def die(msg: str):
     raise SystemExit(f"jian: {msg}")
 

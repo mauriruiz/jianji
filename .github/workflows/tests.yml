@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   fast:
     # The fast suite: no models (Whisper, aligners and the vision model need an Apple GPU and ~10 GB; run them

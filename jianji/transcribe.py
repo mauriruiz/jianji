@@ -52,6 +52,12 @@ class Engine:
         self.langs = list(cfg["languages"])
         self._vad = None
         self._align = {}
+        self._whisper = None
+
+    def whisper(self) -> str:
+        from .core import model_path
+        self._whisper = self._whisper or model_path(self.cfg["model"])
+        return self._whisper
 
     def vad(self, audio: np.ndarray) -> list[tuple[float, float]]:
         import torch
@@ -65,7 +71,7 @@ class Engine:
         import mlx.core as mx
         from mlx_whisper.audio import N_FRAMES, log_mel_spectrogram, pad_or_trim
         from mlx_whisper.transcribe import ModelHolder
-        model = ModelHolder.get_model(self.cfg["model"], mx.float16)
+        model = ModelHolder.get_model(self.whisper(), mx.float16)
         mel = pad_or_trim(log_mel_spectrogram(audio, n_mels=model.dims.n_mels), N_FRAMES, axis=-2).astype(mx.float16)
         _, probs = model.detect_language(mel)
         probs = probs[0] if isinstance(probs, list) else probs
@@ -77,7 +83,7 @@ class Engine:
     def asr(self, audio: np.ndarray, lang: str) -> list[dict]:
         import mlx_whisper
         r = mlx_whisper.transcribe(
-            audio, path_or_hf_repo=self.cfg["model"], language=lang,
+            audio, path_or_hf_repo=self.whisper(), language=lang,
             initial_prompt=" ".join(filter(None, [PROMPTS.get(lang), ", ".join(self.glossary) + "." if self.glossary else ""])),
             condition_on_previous_text=False, temperature=(0.0, 0.2, 0.4, 0.6),
             compression_ratio_threshold=2.4, logprob_threshold=-1.0, no_speech_threshold=0.6, verbose=None)
@@ -87,9 +93,12 @@ class Engine:
         """Returns whispermlx's own segments: it re-splits by sentence, so they don't map 1:1 to the input.
         model: True is jian's aligner for the language (ALIGN), None whispermlx's default, or a model name."""
         import whispermlx
+
+        from .core import model_path
         name = ALIGN.get(lang) if model is True else model
-        if (lang, name) not in self._align:
-            self._align[lang, name] = whispermlx.load_align_model(language_code=lang, device="cpu", model_name=name)
+        if (lang, name) not in self._align:  # None: whispermlx's default, torchaudio's (English: wav2vec2 base 960h)
+            self._align[lang, name] = whispermlx.load_align_model(language_code=lang, device="cpu",
+                                                                  model_name=model_path(name) if name else None)
         model, meta = self._align[lang, name]
         return whispermlx.align(segments, model, meta, audio, "cpu")["segments"]
 

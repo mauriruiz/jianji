@@ -141,6 +141,23 @@ Your media stays on your machine: transcription, alignment, the vision model, re
 goes to Claude is text (transcripts, catalogs, notes, the edit) and a few still frames at decision points (contact
 sheets, a frame at a cut). Nothing is uploaded anywhere else.
 
+## Security
+
+- **Footage is untrusted input.** What's said or shown in a video (a stream's public chat, a slide, a file on screen)
+  reaches Claude as text. The skills treat it as material, never as instructions, but **don't run `/jian-edit` with
+  auto-accept** (accept-all mode or `--dangerously-skip-permissions`) on footage you don't fully control, such as a
+  stream with public chat: let Claude Code ask before it runs anything.
+- **Model downloads are pinned.** Every Hugging Face model is downloaded at an exact commit, as safetensors, and no
+  pickle file is fetched from those repos. The Spanish, French, German and Italian aligners only publish a pickle,
+  so jian uses Hugging Face's own safetensors conversions of them (the Spanish one checked identical to the
+  original).
+- **What still loads through pickle:** the English aligner (wav2vec2 base 960h), which torchaudio downloads from
+  download.pytorch.org as a `.pth` file. Silero VAD is a TorchScript file bundled inside the silero-vad package.
+- **PyTorch 2.8.** whispermlx pins it, and 2.8 has published advisories about loading untrusted checkpoint files and
+  malformed input to specific functions. jian never loads a checkpoint you or anyone else supplies, only the models
+  above; it moves to a fixed PyTorch as soon as whispermlx allows.
+- Found a vulnerability? Report it privately: [SECURITY.md](SECURITY.md).
+
 ## Development
 
 ```sh
