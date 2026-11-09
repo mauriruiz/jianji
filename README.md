@@ -2,6 +2,9 @@
 
 **剪辑 (jiǎnjí) means "video editing" in Chinese; `jian` (剪) means "to cut".**
 
+> **Status: early alpha (v0.1).** Built for my own workflow on macOS / Apple Silicon. Expect rough edges;
+> [issues](https://github.com/mauriruiz/jianji/issues) welcome.
+
 jianji makes the first cut of your videos on your own Mac. Drop the raw footage in a folder, run `/jian-edit` in
 Claude Code, and get back an edited video with captions, a review render with timecodes, a QA report and a
 DaVinci Resolve timeline you can finish by hand.
@@ -12,7 +15,9 @@ feedback in plain words ("S4 drags", "move the example earlier") or open it in R
 
 ## Demo
 
-<!-- video link goes here -->
+[▶ Watch the demo on YouTube](https://youtu.be/DxpFm1cX5NA)
+
+This video was cut by jianji from a 6-hour livestream and then reviewed by me.
 
 ## How it works
 
