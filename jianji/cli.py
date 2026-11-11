@@ -607,7 +607,10 @@ def main(argv=None):
         code = e.code if isinstance(e, SystemExit) else repr(e)
         if code not in (None, 0) and args.cmd not in ("doctor", "hook") and not isinstance(e, KeyboardInterrupt):
             from .core import hook
-            hook("error", command=args.cmd, video=getattr(args, "video", None), error=code)
+            try:
+                hook("error", command=args.cmd, video=getattr(args, "video", None), error=code)
+            except Exception:  # a broken config.toml: the original failure is the one to show
+                pass
         raise
 
 
