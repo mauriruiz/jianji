@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -207,6 +208,26 @@ def validate_brief(meta: dict, cfg: dict, path: Path):
 
 def global_config() -> dict:
     return tomllib.loads(GLOBAL_CONFIG.read_text()) if GLOBAL_CONFIG.exists() else {}
+
+
+def hook(event: str, **facts) -> None:
+    """Your command for an event: `[hooks] on_<event>` in your layer's config.toml, a command line (no shell) or a
+    list. The facts travel as JIAN_* environment variables and never enter the command line: a name or an error that
+    came out of a video can't turn into shell. A hook that fails, hangs or is missing warns, and jian carries on."""
+    cfg = global_config().get("hooks", {})
+    cmd = cfg.get(f"on_{event}")
+    if not cmd:
+        return
+    argv = [os.path.expanduser(x) for x in (shlex.split(cmd) if isinstance(cmd, str) else cmd)]
+    env = {**os.environ, "JIAN_EVENT": event, **{f"JIAN_{k.upper()}": str(v) for k, v in facts.items() if v is not None}}
+    try:
+        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=float(cfg.get("timeout", 30)))
+        sys.stderr.write(r.stdout)
+        err = f"exit {r.returncode}: {r.stderr.strip()[-300:]}" if r.returncode else None
+    except (OSError, subprocess.TimeoutExpired) as e:
+        err = str(e)
+    if err:
+        print(f"jian: hook on_{event} failed ({err}); carrying on", file=sys.stderr)
 
 
 def resolve_video(arg: str) -> Path:

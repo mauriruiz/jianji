@@ -148,6 +148,7 @@ Lowest to highest:
 2. **Your layer**, `~/.config/jianji/` (or `$JIANJI_HOME`):
    - `config.toml`: `schema`, `videos_root`, `[defaults]` for every profile;
    - `config.toml` `[ingest]`: `watch` (where recordings land), `name` and `profile` for `jian ingest`;
+   - `config.toml` `[hooks]`: your command for an event (below);
    - `profiles/<name>.toml`: only the keys you change, or a new profile;
    - `styles/<name>.md`: your editorial rules (replace the built-in guide for that profile);
    - `brand.toml`: fonts and colours for every profile;
@@ -155,6 +156,25 @@ Lowest to highest:
    - `briefs/<profile>.md` or `briefs/default.md`: your brief template for `jian new`;
    - `extensions/<name>.toml`: settings for a series, pulled in by `extends: <name>` in a brief.
 3. **Per video**: `jianji/config.toml`, then brief.md front matter (`section.key: value`).
+
+**Hooks** connect jian to whatever you use (a notifier, a queue, a chat bot) without jian knowing about it:
+
+```toml
+[hooks]
+on_ingest = "~/.config/jianji/hooks/ingest.sh"   # a command line (no shell) or a list
+on_error = ["notify", "--title", "jian failed"]
+timeout = 30                                     # seconds, for every hook
+```
+
+| Event | When | Facts (`JIAN_EVENT` is always set) |
+|---|---|---|
+| `on_ingest` | `jian ingest` made or found a folder | `JIAN_VIDEO`, `JIAN_DIR`, `JIAN_SOURCE` |
+| `on_error` | any command failed | `JIAN_COMMAND`, `JIAN_VIDEO`, `JIAN_ERROR` |
+
+The facts travel as environment variables and are never put on a command line, so a name or an error message that
+came out of a video can't run as shell. Treat them the same way in your script: quote them, and don't forward text
+you don't trust to anything that acts on it. A hook that fails, hangs past `timeout` or is missing prints a warning
+and the run carries on. `jian hook <event> KEY=VALUE...` fires one by hand; `jian doctor` checks each command exists.
 
 `schema` versions the layer's format. When a release changes it, `jian doctor` says what to edit; it also flags keys
 that no built-in profile knows (typos, renamed options) and profiles without a style guide.
