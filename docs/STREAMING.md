@@ -8,6 +8,10 @@ Small habits on stream that make the recap much better. jian hears them (`jian m
   recap's first context line.
 - **When you switch:** "new topic: the scheduler" ("nuevo tema" in Spanish). It marks where a thread starts.
 - **When something works:** "mark that" ("marca eso"). It marks a result worth keeping.
+  Or press a button: a text file next to the recording and named after it (`2026-03-01 22-30-05.marks` for
+  `2026-03-01 22-30-05.mkv`), one line per mark with the time into the recording (`3761.5` or `1:02:41`, then an
+  optional note), counts the same. OBS gives that time over obs-websocket (`GetRecordStatus`), so a hotkey script can
+  append it.
 - **Chat:** read the question out loud before answering ("X asks why I'm not using a library"). It becomes a card.
 - **At the end:** a quick spoken recap: what got done, what's next. It's the recap's outro.
 
