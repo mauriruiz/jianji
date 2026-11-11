@@ -37,6 +37,7 @@ loudness = -14.0
 true_peak = -1.0
 review_height = 960        # at 540 a vertical review is 304 px wide
 burn_captions = true       # final.vNNN.mp4 (the upload file) has the captions burned in with the texts
+preview_mb = 8             # a short cut out of a long video (--short) also gets preview.mp4, 540 px wide, under this size
 
 # Keep-clear margins at 1080x1920, the union of TikTok (top 220, bottom 480, left 60, right 140) and Instagram
 # Reels / Meta (top 270, bottom 670 = 35%, left 65, right 120). Third-party guides, checked 2026-11-06; neither

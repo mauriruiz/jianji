@@ -48,6 +48,10 @@ flowchart LR
   Resolve 21.2 (free). Edit it, export, and `jian pull` brings your changes back as the next version. `jian pull` is
   **experimental**: it's tested on jian's own FCPXML, not yet on a real export from Resolve.
 
+- **Shorts out of a stream**: `/jian-shorts <name>` picks the moments and cuts each as a vertical short, the camera
+  over the screen (two regions of the recording you name once), with a light preview and its own Resolve timeline.
+  See [docs/STREAMING.md](docs/STREAMING.md).
+
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Requirements and limits
@@ -125,7 +129,7 @@ settings. Keep your preferences in your layer (a private git repo works well), n
 ```
 ~/.config/jianji/
   config.toml           schema = 1, videos_root, [defaults] for every profile, [ingest] for recordings,
-                        [hooks] to run your own command on an event
+                        [hooks] to run your own command on an event, [layouts] and [outro] for shorts
   profiles/short.toml   only the keys you change ([cut] max_pause = 0.3), or a whole new profile
   styles/short.md       your editorial rules for that profile (replaces the built-in guide)
   brand.toml            your fonts and colours

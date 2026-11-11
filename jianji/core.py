@@ -247,7 +247,7 @@ class Project:
     """A video folder. jian only ever writes inside <folder>/jianji/ (or vedit/, from before the rename): footage and
     brief.md are yours."""
 
-    def __init__(self, arg: str):
+    def __init__(self, arg: str, short: str | int | None = None):
         self.dir = resolve_video(arg)
         self.name = self.dir.name
         self.out = next((self.dir / n for n in (WORK, LEGACY) if (self.dir / n).is_dir()), self.dir / WORK)
@@ -285,7 +285,34 @@ class Project:
         for f, mine in (("glossary", user_glossary()), ("never_show", [])):
             cfg[f] = list(dict.fromkeys([*cfg.get(f, []), *mine, *(x for e in ext for x in e.get(f, [])),
                                          *self.brief_meta.get(f, [])]))
+        self.short = None
+        if short is not None:
+            cfg = self._short(str(short), cfg)
+        for k in ("layouts", "outro"):  # tables of your config.toml, for every video; a video's own config.toml wins
+            if k in global_config() or k in cfg:
+                cfg[k] = merge(global_config().get(k, {}), cfg.get(k, {}))
         self.cfg = cfg
+
+    def _short(self, n: str, video: dict) -> dict:
+        """A short cut out of this video (a moment of a stream): its own work folder inside the video's, so every
+        command works on it as on any cut, with the video's catalog, transcripts and render cache (links). The
+        `short` profile unless its config.toml names another; speech and privacy settings stay the video's: it was
+        heard and read once."""
+        if not re.fullmatch(r"[\w-]+", n):
+            die(f"a short is named with letters, digits, - or _, got {n!r}")
+        base, self.short, self.name = self.out, n, f"{self.name} short {n}"
+        self.out = base / "shorts" / n
+        self.out.mkdir(parents=True, exist_ok=True)
+        (base / "cache").mkdir(exist_ok=True)
+        for x in ("cache", "catalog.json"):
+            if not os.path.lexists(self.out / x):
+                (self.out / x).symlink_to(Path("..", "..", x))
+        own = _toml(self.out / "config.toml")
+        self.profile = str(own.pop("profile", None) or "short")
+        if self.profile not in profiles():
+            die(f"{self.out / 'config.toml'}: profile '{self.profile}' doesn't exist; valid profiles: {', '.join(profiles())}")
+        cfg = merge(merge(load_profile(self.profile), global_config().get("defaults", {})), own)
+        return {**cfg, **{k: video[k] for k in ("asr", "stream", "glossary", "never_show") if k in video}}
 
     def path(self, *parts) -> Path:
         p = self.out.joinpath(*parts)

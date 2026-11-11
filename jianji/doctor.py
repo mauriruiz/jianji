@@ -62,7 +62,7 @@ def check() -> tuple[list[str], list[str]]:
     if not shutil.which("swiftc"):
         notes.append("no swiftc: text placement and OCR need the Xcode command line tools (xcode-select --install)")
     skills = Path("~/.claude/skills").expanduser()
-    for sk in ("jian-edit", "jian-revise"):
+    for sk in ("jian-edit", "jian-revise", "jian-shorts"):
         if not (skills / sk / "SKILL.md").exists():
             notes.append(f"skill /{sk} not installed: ln -s {PKG.parent / '.claude' / 'skills' / sk} {skills / sk}")
     return bad, notes

@@ -20,6 +20,9 @@
   jian log <video> <key> <value>    record review_minutes, feedback etc. in metrics.json
   jian report [root]                scoreboard: review minutes, versions, QA, machine time, per video
   jian hook <event> [KEY=VALUE]...  run your hook for an event by hand (to try it, or from your own scripts)
+
+Shorts out of a long video: compile, cut, qa, cuts, texts, resolve, at and status take `--short <n>` and work in
+<video>/jianji/shorts/<n>/ (its own edits and renders, the video's transcripts and cache; profile `short`).
   jian doctor                       check the install and your layer (~/.config/jianji) against this version
 
 Hooks: `[hooks] on_ingest | on_error = "command"` in your layer's config.toml; the facts arrive as JIAN_* variables.
@@ -118,7 +121,7 @@ def _edit(p: Project, arg: str | None) -> tuple[dict, int]:
 
 
 def compile_edit(p: Project, edit_arg: str | None, sources: dict) -> tuple[dict, int]:
-    from .compile import EditError, compile_timeline
+    from .compile import EditError, add_outro, compile_timeline
     from .media import motion
     edit, v = _edit(p, edit_arg)
     cat = read_json(p.out / "catalog.json")
@@ -126,7 +129,11 @@ def compile_edit(p: Project, edit_arg: str | None, sources: dict) -> tuple[dict,
         if "in" in c and c.get("src") in sources and "motion" not in sources[c["src"]]:
             sources[c["src"]]["motion"] = motion(p, c["src"], cat["sources"][c["src"]])
     try:
-        tl = compile_timeline(edit, sources, p.cfg["cut"], p.cfg.get("timeline"), p.cfg.get("texts"), p.cfg.get("shots"))
+        tl = compile_timeline(edit, sources, p.cfg["cut"], p.cfg.get("timeline"), p.cfg.get("texts"), p.cfg.get("shots"),
+                              p.cfg.get("layouts"))
+        outro = p.cfg.get("outro") or {}
+        if p.profile in outro.get("profiles", ["short"]):  # your closing line, on the profiles you want it on
+            tl = add_outro(tl, outro, p.cfg.get("texts"))
     except EditError as e:
         die(f"edit v{v:03d} rejected: {e}")
     write_json(p.path("renders", f"timeline.v{v:03d}.json"), tl)
@@ -176,6 +183,10 @@ def cut(p: Project, edit_arg: str | None, qa: bool = True):
         run_qa_cmd(p, v, tl, sources, outs, reuse=read_json(d / f"qa.v{reuse:03d}.json") if reuse else None)
     from .resolve import export  # every cut also opens in Resolve: jianji/resolve/IMPORT.md
     export(p, v)
+    if p.short:  # a short out of a long video is a candidate: a light copy to judge it on a phone
+        from .render import preview
+        mb = float(p.cfg["render"].get("preview_mb", 8))
+        print(f"preview {preview(Path(outs['final']), p.out / 'preview.mp4', tl['stats']['seconds'], mb)}")
 
 
 def run_qa_cmd(p: Project, v: int, tl: dict | None = None, sources: dict | None = None, outs: dict | None = None,
@@ -300,6 +311,13 @@ def status(p: Project):
         qa = read_json(p.out / "renders" / f"qa.v{v:03d}.json")
         print(f"  v{v:03d}: rendered={'yes' if (p.out / 'renders' / f'master.v{v:03d}.mp4').exists() else 'no'}"
               f"  qa={qa['status'] if qa else '-'}")
+    if p.short:  # what the editor of a short needs: the two-panel layouts you defined, and their regions
+        print("layouts: " + ("; ".join(f"{k} (top {v.get('top')}, bottom {v.get('bottom')}"
+                                       f"{', ' + str(v['note']) if v.get('note') else ''})"
+                                       for k, v in (p.cfg.get("layouts") or {}).items()) or "none defined"))
+    shorts = sorted(x.name for x in (p.out / "shorts").glob("*") if x.is_dir())
+    if shorts:
+        print(f"shorts: {', '.join(shorts)}  (jian status {p.dir.name} --short <n>)")
     free = shutil.disk_usage(p.out).free / 1e9
     print(f"disk: {free:.0f} GB free (minimum {p.cfg['disk']['min_free_gb']})")
 
@@ -554,6 +572,8 @@ def main(argv=None):
     ig.add_argument("--name")
     for name in ("prep", "status", "map"):
         sub.add_parser(name).add_argument("video")
+    short = lambda x: x.add_argument("--short", metavar="N", help="work on short N of this video")
+    short(sub.choices["status"])
     w = sub.add_parser("words")
     for a in ("video", "src"):
         w.add_argument(a)
@@ -571,13 +591,16 @@ def main(argv=None):
         c.add_argument("--edit")
         if name == "cut":
             c.add_argument("--no-qa", action="store_true")
+        short(c)
     for name in ("cuts", "texts"):
         cr = sub.add_parser(name)
         cr.add_argument("video")
         cr.add_argument("--v", type=int)
+        short(cr)
     rs = sub.add_parser("resolve")
     rs.add_argument("video")
     rs.add_argument("--v", type=int)
+    short(rs)
     pu = sub.add_parser("pull")
     pu.add_argument("video")
     pu.add_argument("file", nargs="?")
@@ -590,9 +613,11 @@ def main(argv=None):
     q = sub.add_parser("qa")
     q.add_argument("video")
     q.add_argument("--v", type=int)
+    short(q)
     t = sub.add_parser("at")
     t.add_argument("video")
     t.add_argument("tc", nargs="+")
+    short(t)
     lg = sub.add_parser("log")
     lg.add_argument("video")
     lg.add_argument("key")
@@ -630,7 +655,7 @@ def _run(args):
     if args.cmd == "doctor":
         from .doctor import doctor
         return doctor()
-    p = Project(args.video)
+    p = Project(args.video, getattr(args, "short", None))
     if args.cmd == "prep":
         prep(p)
     elif args.cmd == "map":

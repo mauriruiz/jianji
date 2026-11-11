@@ -19,6 +19,9 @@ What you get:
   A3 room tone.
 - Markers: blue sections, yellow "check this", red tight cuts, purple QA issues.
 
+A short with two panels (camera over screen) is the same file twice: V1 is the bottom panel and V2 the top one, each
+trimmed (Inspector > Cropping) and placed (Transform). Compare it with `preview.mp4` before you render.
+
 One-time, optional: Preferences > System > Media Storage, put a working folder of your choice first, so Resolve's
 cache and gallery don't fill your home folder.
 
@@ -36,6 +39,6 @@ instead of failing them.
 
 ## What doesn't come back
 
-jian renders what it can represent. The pull lists the rest as "unsupported": split edits (J/L cuts), level
+Two-panel shorts don't come back yet. jian renders what it can represent. The pull lists the rest as "unsupported": split edits (J/L cuts), level
 keyframes, speed changes, transforms on footage, transitions, compound and multicam clips, footage from outside the
 video folder, grading and effects. If you use them, render the final from Resolve.

@@ -144,16 +144,47 @@ def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
 
 
 def _look(x: dict) -> dict:
-    return {k: x[k] for k in ("speed", "crop", "blur") if x.get(k)}
+    return {k: x[k] for k in ("speed", "crop", "blur", "stack") if x.get(k)}
+
+
+def _base_fit(W: int, H: int, sw: int, sh: int) -> float:
+    """Screen pixels per source pixel before any transform: jian's (and Resolve's "scale full frame with crop") fit.
+    Every FCPXML scale here is relative to it."""
+    return max(W / sw, H / sh)
+
+
+def _panel(region: list[float], box: tuple[int, int, int, int], W: int, H: int, sw: int, sh: int) -> str:
+    """One panel of a stacked clip, as FCPXML: the source trimmed to what the panel shows (the region, cover-fitted
+    to the box: percent of each side's own dimension), scaled, and moved so the region's centre sits on the box's.
+    The one place that decides how a two-panel short reads in Resolve."""
+    x0, y0, x1, y1 = region
+    bx0, by0, bx1, by1 = box
+    bw, bh = bx1 - bx0, by1 - by0
+    base = _base_fit(W, H, sw, sh)
+    z = max(bw / ((x1 - x0) * sw * base), bh / ((y1 - y0) * sh * base))
+    k = base * z  # screen pixels per source pixel
+    cx, cy = (x0 + x1) / 2 * sw, (y0 + y1) / 2 * sh
+    vw, vh = bw / k, bh / k  # the part of the source the box shows
+    trim = [max(0.0, cx - vw / 2) / sw, max(0.0, cy - vh / 2) / sh, max(0.0, sw - cx - vw / 2) / sw,
+            max(0.0, sh - cy - vh / 2) / sh]
+    px = (bx0 + bx1) / 2 - W / 2 - (cx - sw / 2) * k
+    py = (by0 + by1) / 2 - H / 2 - (cy - sh / 2) * k
+    return ('<adjust-crop mode="trim"><trim-rect left="{:.4f}" top="{:.4f}" right="{:.4f}" bottom="{:.4f}"/></adjust-crop>'
+            .format(*(100 * t for t in trim))
+            + f'<adjust-transform position="{px / H * 100:.4f} {-py / H * 100:.4f}" scale="{z:.5f} {z:.5f}"/>')
 
 
 def _transform(i: dict, W: int, H: int, sw: int, sh: int) -> str:
     """A crop ([x0, y0, x1, y1] of the source) as an FCPXML zoom: scale about the centre, then move the cropped
-    region's centre to the frame's centre. "" when there's nothing to say."""
+    region's centre to the frame's centre. A stacked clip: its bottom panel (the top one is a clip of its own, above
+    it). "" when there's nothing to say."""
+    if i.get("stack"):
+        from .render import panels
+        return _panel(*panels(i["stack"], W, H)[1], W, H, sw, sh)
     if not i.get("crop"):
         return ""
     x0, y0, x1, y1 = i["crop"]
-    cover = max(W / sw, H / sh)  # jian's (and Resolve's "scale full frame with crop") fit before the zoom
+    cover = _base_fit(W, H, sw, sh)
     z = max(1 / (x1 - x0), 1 / (y1 - y0))
     dx, dy = ((x0 + x1) / 2 - 0.5) * sw * cover * z, ((y0 + y1) / 2 - 0.5) * sh * cover * z
     return f'<adjust-transform position="{-dx / H * 100:.4g} {dy / H * 100:.4g}" scale="{z:.4g} {z:.4g}"/>'
@@ -220,7 +251,7 @@ def plan(p: Project, v: int) -> dict:
                             "note": i["msg"]})
     markers = sorted((m for m in markers if 0 <= m["frame"] < tl["frames"]), key=lambda m: m["frame"])
     srt = d / f"captions.v{v:03d}.srt"
-    return {"name": f"{p.name} v{v:03d}", "video": p.name, "v": v, "fps": F, "size": tl["size"], "frames": tl["frames"],
+    return {"name": f"{p.name} v{v:03d}", "video": p.dir.name, "v": v, "fps": F, "size": tl["size"], "frames": tl["frames"],
             "sources": srcs, "items": items, "markers": markers, "srt": str(srt) if srt.exists() else None,
             "loud_gain": gain}
 
@@ -278,6 +309,11 @@ def write_fcpxml(pl: dict, path: Path) -> Path:
             el.append(f'<timeMap><timept time="{_secs(s0)}" value="{_secs(s0)}" interp="linear"/><timept '
                       f'time="{_secs(s0 + Fraction(v["end"] - v["start"]) / F)}" value="{_secs(s0 + Fraction(v["end"] - v["start"]) * Fraction(v["speed"]).limit_denominator(100) / F)}" '
                       'interp="linear"/></timeMap>')
+        if v.get("stack"):  # the top panel: the same frames again, picture only, on the track above (it hides
+            from .render import panels  # whatever the bottom panel spills past the split if the trim is ever lost)
+            el.append(f'<asset-clip ref="a_{v["src"]}" lane="{LANES["V2"]}" offset="{local(v["start"])}" name="{name} top" '
+                      f'start="{src_t(v["src"], v["in"])}" duration="{t(v["end"] - v["start"])}" srcEnable="video">'
+                      + _panel(*panels(v["stack"], W, H)[0], W, H, src["w"] or W, src["h"] or H) + "</asset-clip>")
         if a is not None and a["track"] == "A3":
             el.append(f'<asset-clip ref="s_{a["src"]}" lane="{LANES["A3"]}" offset="{local(a["start"])}" name="room tone" '
                       f'start="{src_t(a["src"], a["in"])}" duration="{t(a["end"] - a["start"])}">'
@@ -333,7 +369,7 @@ GUIDE = """# {name} in DaVinci Resolve
 The media is your original footage in `{footage}` (linked by path: drag any edge to recover material) and the
 callout boxes in `{texts}`. Tracks: V1 A-roll, V2 B-roll, V3 callout boxes, V4 texts (editable titles), A1 the
 A-roll's sound, A2 B-roll sound, A3 room tone. Markers: blue sections, yellow check this, red tight cuts, purple QA.
-One-time, optional: Preferences > System > Media Storage, put `{work}` first (cache and gallery out of ~/Movies).
+{stack}One-time, optional: Preferences > System > Media Storage, put `{work}` first (cache and gallery out of ~/Movies).
 
 **Back** (after editing):
 1. File > Export > Timeline… > "FCPXML 1.10", save as `{back}/{name}.fcpxml`.
@@ -355,7 +391,10 @@ def export(p: Project, v: int | None = None) -> Path:
     for sub in ("CacheClip", "Gallery", "ProjectMedia"):
         (WORKDIR.expanduser() / sub).mkdir(parents=True, exist_ok=True)
     W, H = pl["size"]
-    (out / "IMPORT.md").write_text(GUIDE.format(name=pl["name"], video=p.name, fcpxml=f, w=W, h=H, fps=pl["fps"],
+    stack = ("Two-panel clips are the same file twice: V1 the bottom panel, V2 the top one, each trimmed (Inspector > "
+             "Cropping) and placed (Transform). Check it against the preview before you render; `jian pull` doesn't "
+             "read these back.\n") if any(i.get("stack") for i in pl["items"]) else ""
+    (out / "IMPORT.md").write_text(GUIDE.format(name=pl["name"], video=p.dir.name, stack=stack, fcpxml=f, w=W, h=H, fps=pl["fps"],
                                                 srt=pl["srt"], footage=p.footage, texts=out / f"texts.v{v:03d}",
                                                 work=WORKDIR.expanduser(), back=out / "from-resolve"))
     print(f"resolve {f}\n        guide: {out / 'IMPORT.md'}")
@@ -693,6 +732,8 @@ def pull(p: Project, file: str | None) -> Path:
                   key=lambda f: int(re.search(r" v(\d{3})\.manifest", f.name).group(1)))
     man_path = next((f for f in mans if m and f"v{m.group(1)}." in f.name), mans[-1] if mans else None)
     man = read_json(man_path) if man_path else die("no manifest: run `jian resolve` first")
+    if any(i.get("stack") for i in man["items"]):
+        die("a two-panel cut doesn't come back from Resolve yet: finish it there and render the final from Resolve")
     ch, m_of = changes(man, got)
     base = read_json(p.out / "edits" / f"edit.v{man['v']:03d}.json") or die(f"no edit v{man['v']:03d}")
     placement = read_json(p.out / "renders" / f"placement.v{man['v']:03d}.json", {})

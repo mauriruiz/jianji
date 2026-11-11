@@ -21,6 +21,29 @@ Small habits on stream that make the recap much better. jian hears them (`jian m
 - Keep secrets off screen: close `.env` files, use a separate browser profile, turn on Do Not Disturb (notifications).
   QA still checks, but it can only blur what was recorded.
 
+## Shorts from the stream
+
+`/jian-shorts <name>` (after `jian prep` and `jian map`) picks up to three moments that stand alone and cuts each as
+a vertical short in `jianji/shorts/<n>/`, with `preview.mp4` to watch on a phone and its own Resolve timeline. Say
+"mark that" on stream when something deserves one.
+
+Tell jian once where the camera and the code are in your scene, as regions of the recording, and the shorts stack
+them (camera over code); the editor zooms the bottom panel on the lines you're talking about:
+
+```toml
+# ~/.config/jianji/config.toml
+[layouts.code]
+top = [0.75, 0.72, 1.0, 1.0]       # the webcam: [x0, y0, x1, y1] of the frame, 0-1
+bottom = [0.14, 0.02, 0.62, 0.98]  # the editor
+split = 0.36
+
+[outro]
+text = "Live Mon-Thu 22:30"
+```
+
+A webcam that is small in the recording is enlarged to fill the top panel and looks soft: under about 1080 px wide it
+shows. Record it as a separate source (above) or switch to a full-screen camera scene for the moments you'd clip.
+
 ## After the stream
 
 `jian ingest` turns the recording into a video folder without touching it: `<videos_root>/<date>-<name>/` with your
