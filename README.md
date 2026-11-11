@@ -124,7 +124,7 @@ settings. Keep your preferences in your layer (a private git repo works well), n
 
 ```
 ~/.config/jianji/
-  config.toml           schema = 1, videos_root, [defaults] for every profile
+  config.toml           schema = 1, videos_root, [defaults] for every profile, [ingest] for recordings
   profiles/short.toml   only the keys you change ([cut] max_pause = 0.3), or a whole new profile
   styles/short.md       your editorial rules for that profile (replaces the built-in guide)
   brand.toml            your fonts and colours

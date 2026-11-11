@@ -147,6 +147,7 @@ Lowest to highest:
 1. **Built-in** (`jianji/profiles/*.toml`, `jianji/styles/*.md`), shipped with the code.
 2. **Your layer**, `~/.config/jianji/` (or `$JIANJI_HOME`):
    - `config.toml`: `schema`, `videos_root`, `[defaults]` for every profile;
+   - `config.toml` `[ingest]`: `watch` (where recordings land), `name` and `profile` for `jian ingest`;
    - `profiles/<name>.toml`: only the keys you change, or a new profile;
    - `styles/<name>.md`: your editorial rules (replace the built-in guide for that profile);
    - `brand.toml`: fonts and colours for every profile;
