@@ -63,5 +63,8 @@ name = "{date}-{slug}"      # the folder's name; {slug} is the rest of the file'
 profile = "stream"
 ```
 
-Then `jian prep`, `jian map` and `/jian-edit` as usual. The recording stays where OBS wrote it, under its own name:
+Then `jian prep`, `jian map` and `/jian-edit` as usual, or all of it overnight: `scripts/night.sh <folder>` runs
+prep and map, has Claude Code cut the shorts with its permissions cut down to jian and the work folder (README,
+Security), and ends with `jian queue --announce`, so your `on_queue_ready` hook can tell you in the morning. The log
+is `jianji/night.log`. The recording stays where OBS wrote it, under its own name:
 keep it there while you work on the folder. Running `jian ingest` again on the same file finds the same folder.
