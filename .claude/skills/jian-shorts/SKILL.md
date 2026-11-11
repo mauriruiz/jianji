@@ -62,6 +62,9 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
   the short is about, plainly.
 - Speech by word id (`from`/`to`, `cut` for ranges to drop inside), exactly as in `/jian-edit`: never timestamps,
   every clip ends on a clause or sentence end. `jian words <name> <src> <a> <b>` shows the ids of a range.
+- Look before you frame: `jian sheet <name> <src> <a> <b>` (seconds) writes a contact sheet of that stretch of the
+  recording; Read the image to see what is on screen then (the editor, a diagram, a browser, the camera alone) and
+  where. Frame for what you saw, not for what the transcript suggests.
 - `"layout": "<name>"` on a clip shows two regions of the frame one over the other (the camera over the screen); use
   the user's layout that fits what's on screen then (`stream.md` says which app is in front). The clip's own `"crop"`
   ([x0, y0, x1, y1] of the source, 0-1) replaces the bottom region: zoom on the lines being talked about (the
