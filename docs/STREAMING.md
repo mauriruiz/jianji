@@ -41,6 +41,11 @@ split = 0.36
 text = "Live Mon-Thu 22:30"
 ```
 
+`jian queue` lists the shorts waiting for you; `jian approve <video>:<n>` puts one in your upload folder
+(`[queue] upload = "~/Movies/To upload"`) as a Resolve project on the original recording, ready to finish and
+render by hand; `jian reject <video>:<n>` drops it. Keep the recording while a short of it waits there:
+`jian queue --protected` lists the files still needed.
+
 A webcam that is small in the recording is enlarged to fill the top panel and looks soft: under about 1080 px wide it
 shows. Record it as a separate source (above) or switch to a full-screen camera scene for the moments you'd clip.
 

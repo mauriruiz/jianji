@@ -167,6 +167,17 @@ Every `jian cut --short` also writes `preview.mp4` (540 px wide, H.264, under `[
 short on a phone. In the FCPXML a two-panel clip is the same frames twice: the bottom panel on V1, the top one on
 V2, each with a trim (`adjust-crop`) and a transform. `jian pull` doesn't read two-panel cuts back yet.
 
+**The queue.** A short whose latest cut is rendered and didn't fail QA is a candidate, `<video>:<n>`:
+
+| Command | What it does |
+|---|---|
+| `jian queue [--json] [--all]` | the candidates: id, title, seconds, QA, the preview's path. `--all` adds the judged, the failed and the unrendered. `--announce` fires `on_queue_ready` when something waits |
+| `jian approve <id>` | writes `<[queue] upload>/<video>-<n> <title>/`: the FCPXML on the original recording, its text boxes, the captions, `IMPORT.md`, `preview.mp4`, `title.txt`. No final render: that happens in Resolve, by hand. A failed or unchecked short needs `--force` |
+| `jian reject <id>` | takes it off the list. Nothing is deleted; a new cut of it is a candidate again |
+| `jian queue --protected` | the recordings a waiting short still needs (cited by a timeline in the upload folder, or by a candidate): what a clean-up of yours must not delete. Moving a folder out of the upload folder releases its recording |
+
+The state is one file, `shorts/<n>/state.json`. `jian clean` never deletes footage, protected or not.
+
 ## 8. Configuration layers
 
 Lowest to highest:
@@ -177,6 +188,7 @@ Lowest to highest:
    - `config.toml` `[ingest]`: `watch` (where recordings land), `name` and `profile` for `jian ingest`;
    - `config.toml` `[hooks]`: your command for an event (below);
    - `config.toml` `[layouts.<name>]` and `[outro]`: two-panel layouts and a closing line for shorts (section 7);
+   - `config.toml` `[queue]`: `upload`, the folder `jian approve` writes to;
    - `profiles/<name>.toml`: only the keys you change, or a new profile;
    - `styles/<name>.md`: your editorial rules (replace the built-in guide for that profile);
    - `brand.toml`: fonts and colours for every profile;
@@ -197,6 +209,9 @@ timeout = 30                                     # seconds, for every hook
 | Event | When | Facts (`JIAN_EVENT` is always set) |
 |---|---|---|
 | `on_ingest` | `jian ingest` made or found a folder | `JIAN_VIDEO`, `JIAN_DIR`, `JIAN_SOURCE` |
+| `on_queue_ready` | `jian queue --announce`, and a short is waiting | `JIAN_COUNT`, `JIAN_VIDEOS` (comma-separated) |
+| `on_approve` | `jian approve <id>` | `JIAN_ID`, `JIAN_VIDEO`, `JIAN_SHORT`, `JIAN_DIR` (the folder made) |
+| `on_reject` | `jian reject <id>` | `JIAN_ID`, `JIAN_VIDEO`, `JIAN_SHORT` |
 | `on_error` | any command failed | `JIAN_COMMAND`, `JIAN_VIDEO`, `JIAN_ERROR` |
 
 The facts travel as environment variables and are never put on a command line, so a name or an error message that

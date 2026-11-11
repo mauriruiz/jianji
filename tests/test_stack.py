@@ -1,19 +1,18 @@
 """A short cut out of a long video: a work folder of its own inside the video's, clips with a two-panel layout (one
 region of the source over another), the outro, the preview, and the same picture as an FCPXML for Resolve.
 The source is synthetic: four coloured quadrants and a tone. Renders 4 s at 1080x1920, so ~15 s."""
-import json
-import re
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import cut_short, quadrants
 
-from jianji import cli, core, resolve
+from jianji import core, resolve
 from jianji.compile import EditError, _stacked, add_outro
 from jianji.core import FFMPEG, Project, read_json
-from jianji.media import build_catalog, ffprobe
+from jianji.media import ffprobe
 from jianji.render import panels, picture_filter
 
 LAYOUT = {"top": [0.5, 0, 1, 0.5], "bottom": [0, 0.5, 0.5, 1]}  # red over green
@@ -22,24 +21,17 @@ EDIT = {"v": 1, "clips": [{"id": "p1", "src": "A", "in": 0.0, "out": 2.0, "layou
         "texts": [{"id": "t1", "text": "It works", "over": "p1", "at": 0.2}]}
 
 
+CONFIG = (f'[layouts.cam]\ntop = {LAYOUT["top"]}\nbottom = {LAYOUT["bottom"]}\n\n'
+          '[outro]\ntext = "Live Mon-Thu 22:30"\nseconds = 1.5\n')
+
+
 @pytest.fixture(scope="module")
 def short(tmp_path_factory):
     d = tmp_path_factory.mktemp("stream")
     (d / "footage").mkdir()
-    quad = ";".join(f"color=c={c}:s=640x360:r=30[{k}]" for k, c in zip("abcd", ("blue", "red", "green", "yellow")))
-    subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", f"{quad};[a][b]hstack[t];[c][d]hstack[u];[t][u]vstack",
-                    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "4", "-c:v", "libx264",
-                    "-pix_fmt", "yuv420p", "-c:a", "aac", d / "footage" / "screen.mp4"], check=True)
+    quadrants(d / "footage" / "screen.mp4")
     (d / "brief.md").write_text("---\nprofile: stream\n---\n")
-    video = Project(str(d))
-    build_catalog(video)
-    p = Project(str(d), short="1")
-    (p.out / "config.toml").write_text(f'[layouts.cam]\ntop = {LAYOUT["top"]}\nbottom = {LAYOUT["bottom"]}\n\n'
-                                       '[outro]\ntext = "Live Mon-Thu 22:30"\nseconds = 1.5\n')
-    p = Project(str(d), short="1")
-    (p.out / "edits").mkdir()
-    (p.out / "edits" / "edit.v001.json").write_text(json.dumps(EDIT))
-    cli.cut(p, None, qa=False)
+    video, p = cut_short(d, CONFIG, EDIT)
     return video, p, read_json(p.out / "renders" / "timeline.v001.json")
 
 

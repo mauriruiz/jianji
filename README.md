@@ -50,6 +50,8 @@ flowchart LR
 
 - **Shorts out of a stream**: `/jian-shorts <name>` picks the moments and cuts each as a vertical short, the camera
   over the screen (two regions of the recording you name once), with a light preview and its own Resolve timeline.
+  `jian queue` lists the candidates; `jian approve <id>` puts one in your upload folder as a Resolve project on the
+  original recording. jian never renders the final file of an approved short and never publishes anything.
   See [docs/STREAMING.md](docs/STREAMING.md).
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -129,7 +131,8 @@ settings. Keep your preferences in your layer (a private git repo works well), n
 ```
 ~/.config/jianji/
   config.toml           schema = 1, videos_root, [defaults] for every profile, [ingest] for recordings,
-                        [hooks] to run your own command on an event, [layouts] and [outro] for shorts
+                        [hooks] to run your own command on an event, [layouts] and [outro] for shorts,
+                        [queue] for the folder approved shorts go to
   profiles/short.toml   only the keys you change ([cut] max_pause = 0.3), or a whole new profile
   styles/short.md       your editorial rules for that profile (replaces the built-in guide)
   brand.toml            your fonts and colours
