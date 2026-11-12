@@ -4,6 +4,7 @@ The source is synthetic: four coloured quadrants and a tone. Renders 4 s at 1080
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import numpy as np
 import pytest
@@ -13,7 +14,7 @@ from jianji import core, resolve
 from jianji.compile import EditError, _stacked, add_outro
 from jianji.core import FFMPEG, Project, read_json
 from jianji.media import ffprobe
-from jianji.render import panels, picture_filter
+from jianji.render import NBSP, panels, picture_filter, shown
 
 LAYOUT = {"top": [0.5, 0, 1, 0.5], "bottom": [0, 0.5, 0.5, 1]}  # red over green
 EDIT = {"v": 1, "clips": [{"id": "p1", "src": "A", "in": 0.0, "out": 2.0, "layout": "cam"},
@@ -89,6 +90,11 @@ def test_layouts_and_outro_come_from_your_layer(short, monkeypatch):
     assert cfg["outro"] == {"text": "Live Mon-Thu 22:30", "seconds": 1.5}  # this short's own config.toml wins
 
 
+def test_the_outro_breaks_where_you_break_it():
+    tl = add_outro({"fps": "30", "frames": 300, "texts": [], "warnings": []}, {"text": "Live Mon-Thu 22:30\nSundays 11:00"}, {})
+    assert shown(tl["texts"][-1], [], {"line_chars": 10}).replace(NBSP, " ") == "Live Mon-Thu 22:30\nSundays 11:00"
+
+
 def test_the_outro_closes_the_cut(short):
     video, p, tl = short
     o = tl["texts"][-1]
@@ -118,16 +124,21 @@ def test_resolve_gets_two_trimmed_clips_of_the_same_frames(short):
     top = next(c for c in bottom if c.tag == "asset-clip")
     nums = lambda el, tag, attr: [float(x) for x in el.find(tag).get(attr).split()]
     trim = lambda el: [float(el.find("adjust-crop/trim-rect").get(k)) for k in ("left", "top", "right", "bottom")]
-    # 1280x720 in 1080x1920, cover fit 2.6667: worked by hand from the two regions and the 692 px split
-    assert trim(top) == pytest.approx([53.0527, 0, 3.0527, 50], abs=0.01)
+    # 1280x720 in 1080x1920, cover fit 2.6667: worked by hand from the two regions and the 692 px split, then into
+    # Resolve's units: sides and x are fractions of the frame applied to the filled image (16/9 squared: 3.1605)
+    assert trim(top) == pytest.approx([53.0527 * 9 / 16, 0, 3.0527 * 9 / 16, 50], abs=0.01)
     assert nums(top, "adjust-transform", "scale") == pytest.approx([0.72083] * 2, abs=1e-4)
-    assert nums(top, "adjust-transform", "position") == pytest.approx([-32.0370, 13.9583], abs=0.01)
-    assert trim(bottom) == pytest.approx([12.6323, 50, 62.6323, 0], abs=0.01)
+    assert nums(top, "adjust-transform", "position") == pytest.approx([-32.0370 / 3.1605, 13.9583], abs=0.01)
+    assert trim(bottom) == pytest.approx([12.6323 * 9 / 16, 50, 62.6323 * 9 / 16, 0], abs=0.01)
     assert nums(bottom, "adjust-transform", "scale") == pytest.approx([1.27917] * 2, abs=1e-4)
-    assert nums(bottom, "adjust-transform", "position") == pytest.approx([56.8519, 13.9583], abs=0.01)
+    assert nums(bottom, "adjust-transform", "position") == pytest.approx([56.8519 / 3.1605, 13.9583], abs=0.01)
+    assert top.find("adjust-conform").get("type") == bottom.find("adjust-conform").get("type") == "fill"
     assert top.get("lane") == "1" and top.get("srcEnable") == "video" and top.get("ref") == bottom.get("ref")
     assert (top.get("offset"), top.get("duration")) == (bottom.get("start"), bottom.get("duration"))
     assert [t.get("name") for t in spine.iter("title")] == ["t1", "outro"]
+    media = [Path(unquote(urlparse(m.get("src")).path)) for m in ET.parse(f).getroot().iter("media-rep")]
+    assert "outro-box.png" in [m.name for m in media] and all(m.exists() for m in media)
+    assert all(m.name.count(".") == 1 for m in media if m.suffix == ".png")  # Resolve drops the middle of "a.b.png"
     assert "Two-panel clips" in (p.out / "resolve" / "IMPORT.md").read_text()
     with pytest.raises(SystemExit, match="two-panel"):
         resolve.pull(p, str(f))
