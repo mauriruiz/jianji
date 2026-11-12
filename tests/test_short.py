@@ -51,9 +51,11 @@ def _rows(path, t: float) -> np.ndarray:
 @pytest.mark.models
 def test_vertical_cut_passes_qa(short):
     p, cat, sources, tl, outs = short
-    res = run_qa(tl, sources, outs, Engine(p.cfg["asr"]), p.cfg["captions"], p.cfg["render"], texts=p.cfg["texts"])
+    res = run_qa(tl, sources, outs, Engine(p.cfg["asr"]), p.cfg["captions"], p.cfg["render"], texts=p.cfg["texts"],
+                 hook=p.cfg["hook"])
     st = {c["name"]: c["status"] for c in res["checks"]}
     assert st["size"] == "pass" and "final" in outs and "1080x1920" in next(c for c in res["checks"] if c["name"] == "size")["detail"]
+    assert st["hook"] == "pass" and "picture" in next(c for c in res["checks"] if c["name"] == "hook")["detail"]  # no speech
     assert st["text_readable"] == "pass" and st["clipped_words"] == "pass" and res["status"] != "fail", res
     # p1 would flash 0.8 s before b1, so b1 starts earlier and covers it; b2 is the source's last second, chained
     # after b1: it can't be held 1.2 s, QA counts it (a warning)

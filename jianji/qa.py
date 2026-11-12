@@ -118,10 +118,12 @@ def safe_zone(boxes: list[tuple], size: list[int], zone: dict) -> list[tuple[flo
 def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, render_cfg: dict,
            zone: dict | None = None, reuse: dict | None = None, cut: dict | None = None,
            vision: list[dict] | None = None, texts: dict | None = None, shots: dict | None = None,
-           ocr: list[dict] | None = None, never: list[str] | None = None, allow: list[str] | None = None) -> dict:
+           ocr: list[dict] | None = None, never: list[str] | None = None, allow: list[str] | None = None,
+           hook: dict | None = None) -> dict:
     """reuse: a previous QA result for a master with the same sound; its HEAVY checks are carried over.
     cut: the profile's [cut], for the breathing check. vision: faces/subject from vision.detect on the master.
-    texts: the profile's [texts], for reading time. shots: its [shots], for least holds."""
+    texts: the profile's [texts], for reading time. shots: its [shots], for least holds. hook: its [hook], for how
+    the cut opens."""
     F = Fraction(tl["fps"])
     frame = float(1 / F)
     segs = tl["segments"]
@@ -240,6 +242,13 @@ def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, rend
               f"{sum(not j['why'] for j in tight)} without breathing room, "
               f"{len({x['why'] for x in tight + mids if x['why']})} kept tight on purpose (abrupt); median quiet "
               + ", ".join(f"{c} {v:.2f}s" for c, v in med.items()))
+    if hook:  # the first seconds: on the line itself, said in one go
+        cur[0] = "hook"
+        from .compile import opening
+        found, how = opening(tl, sources, hook)
+        for sev, t, msg in found:
+            issue(t, sev, msg)
+        check("hook", "fail" if any(x[0] == "fail" for x in found) else "warn" if found else "pass", how)
     if shots and shots.get("min_visible"):  # nothing on screen for a jarring fraction of a second
         cur[0] = "short_segments"
         from .compile import picture_runs

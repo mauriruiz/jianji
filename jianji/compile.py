@@ -276,6 +276,48 @@ def carries_on(W: list[dict], last: int, first: int) -> bool:
     return first > last + 1 and all(W[x].get("filler") or W[x].get("cue") for x in range(last + 1, first))
 
 
+def opening(tl: dict, sources: dict, hook: dict) -> tuple[list[tuple[str, float, str]], str]:
+    """How the cut opens, against the profile's [hook]: ((severity, output time, what's wrong) for each problem, a line
+    that describes the opening). The first seconds decide whether anyone stays, so a cut that opens on speech opens on
+    its line: never on a run-up (a filler, or the words in `preamble`), said in one go (in the first `seconds`, never
+    more than `pause_max` from one word's start to the next: aligned word ends can't be trusted to show a pause), and
+    on the line the edit names as its "hook", if it names one. The first sentence should land inside those seconds (a
+    warning: a long one can still be the hook). A cut that opens on a picture isn't judged."""
+    import difflib
+    from .transcribe import norm
+    F = Fraction(tl["fps"])
+    segs = tl["segments"]
+    if not segs or not segs[0]["kept"] or segs[0].get("picture_head"):
+        return [], "opens on a picture: not judged"
+    win, said = float(hook.get("seconds", 3)), []  # said: (start, end, word) of the kept words, in output time
+    for s in segs:
+        W, off = sources[s["src"]]["words"], float(s["rec"] / F) - s["in"]
+        said += [(W[k]["s"] + off, W[k]["e"] + off, W[k]) for k in s["kept"]]
+        if said and said[-1][0] > win + 15:
+            break
+    line = " ".join(norm(w["t"]) for *_, w in said).split()
+    head, out = " ".join(line[:8]), []
+    run_up = next((ph for ph in map(norm, hook.get("preamble", [])) if ph and (head + " ").startswith(ph + " ")), None)
+    if said[0][2].get("filler") or run_up:
+        out.append(("fail", said[0][0], f"opens on a run-up ({run_up or said[0][2]['t']!r}): start the first clip on the "
+                    "line itself"))
+    mine = norm(str(tl.get("hook") or "")).split()
+    if mine and difflib.SequenceMatcher(a=mine, b=line[:len(mine)], autojunk=False).ratio() < 0.6:
+        out.append(("fail", said[0][0], f"the edit's hook is {tl['hook']!r} but the cut opens on "
+                    f"{' '.join(w['t'] for *_, w in said[:len(mine)])!r}: start the first clip on it, or correct the hook"))
+    gap, at, after = max(((b[0] - a[0], a[0], a[2]["t"]) for a, b in zip(said, said[1:]) if b[0] <= win),
+                         default=(0.0, 0.0, ""))
+    if gap > float(hook.get("pause_max", 1.0)):
+        out.append(("fail", at, f"{gap:.1f}s from {after!r} to the next word, in the first {win:g}s: open on a line said "
+                    "in one go"))
+    land = next((e for _, e, w in said if ends_sentence(w["t"])), None)
+    if land is None or land > win:
+        out.append(("warn", 0.0, "the opening line " + (f"lands at {land:.1f}s" if land else "never ends a sentence")
+                    + f": a hook is one short sentence, inside the first {win:g}s"))
+    return out, (f"opens on {' '.join(w['t'] for *_, w in said[:8])!r}: first sentence lands at "
+                 + (f"{land:.1f}s" if land else "no point") + f", slowest word to word {gap:.2f}s in the first {win:g}s")
+
+
 def _trailing(W: list[dict], k: int, a: int, b: int) -> bool:
     """A filler that closes its sentence ("pica mucho, eh."): said right after the word before it and ending the
     sentence or the clip. It stays: without it the sentence sounds chopped."""
@@ -595,10 +637,12 @@ def add_outro(tl: dict, outro: dict | None, tx: dict | None) -> dict:
 
 
 def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None = None, texts: dict | None = None,
-                     shots: dict | None = None, layouts: dict | None = None) -> dict:
+                     shots: dict | None = None, layouts: dict | None = None, hook: dict | None = None) -> dict:
     """timeline: the profile's [timeline] (size, fps); the edit's own "timeline" wins. texts: the profile's [texts]
     (reading speed: every text stays up long enough to read). shots: its [shots] (least hold per shot type).
-    layouts: your named two-panel layouts, for clips with "layout"."""
+    layouts: your named two-panel layouts, for clips with "layout". hook: its [hook] (how the cut opens)."""
+    if not isinstance(edit.get("hook", ""), str):
+        raise EditError('"hook" is the line the cut opens on, as said: a string')
     clips = edit.get("clips", [])
     if not clips:
         raise EditError("edit has no clips")
@@ -792,14 +836,17 @@ def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None
     reorders = [{"sec": b["id"], "after": a["id"], "src_t": round(first[b["id"]]["in"], 1), "prev_t": round(first[a["id"]]["in"], 1)}
                 for a, b in zip(sections, sections[1:]) if first[b["id"]]["src"] == first[a["id"]]["src"]
                 and first[b["id"]]["in"] < first[a["id"]]["in"] - 30]
-    return {"fps": str(F), "size": size, "frames": rec, "segments": merged, "overlays": overlays, "texts": texts,
-            "shots": sorted(shot_list, key=lambda s: s["rec"]), "sections": sections, "reorders": reorders,
-            "justified": {**{c["id"]: c["abrupt"] for c in clips if c.get("abrupt")},
-                          **{c["id"]: "your cut in Resolve" for c in clips if c.get("locked")}},
-            "locked": sorted(locked | {x["id"] for x in overlays + texts if x.get("locked")}),
-            **({"captions": edit["captions"]} if edit.get("captions") else {}),
-            "markers": _markers(edit, merged, sources, F),
-            "stats": {**stats, "segments": len(merged), "seconds": round(float(rec / F), 2)}, "warnings": warnings}
+    tl = {"fps": str(F), "size": size, "frames": rec, "segments": merged, "overlays": overlays, "texts": texts,
+          "shots": sorted(shot_list, key=lambda s: s["rec"]), "sections": sections, "reorders": reorders,
+          "justified": {**{c["id"]: c["abrupt"] for c in clips if c.get("abrupt")},
+                        **{c["id"]: "your cut in Resolve" for c in clips if c.get("locked")}},
+          "locked": sorted(locked | {x["id"] for x in overlays + texts if x.get("locked")}),
+          **({k: edit[k] for k in ("captions", "hook") if edit.get(k)}),
+          "markers": _markers(edit, merged, sources, F),
+          "stats": {**stats, "segments": len(merged), "seconds": round(float(rec / F), 2)}, "warnings": warnings}
+    if hook:  # said now, before anything renders; QA judges the same thing on the render's timeline
+        warnings += [f"opening: {msg}" + (" (QA fails it)" if sev == "fail" else "") for sev, _, msg in opening(tl, sources, hook)[0]]
+    return tl
 
 
 def _validate(segs: list[dict], sources: dict, F: Fraction) -> list[str]:

@@ -91,7 +91,8 @@ Speech is chosen by word id and never by timestamp. Clips play in list order; ov
 clip and a word or an offset. Optional per clip: `"abrupt": "<why>"` (a tight cut at a topic jump), `"keep"`,
 `"fix"` (caption spelling), `"speed"`, `"crop"`, `"blur"`, `"layout"` (two regions of the source one over the
 other, section 7). After a pull, items carry `"locked"` (your hand edit in
-Resolve) or `"pinned"` (jian's own cut, frozen at the frames you saw).
+Resolve) or `"pinned"` (jian's own cut, frozen at the frames you saw). Optional on the edit itself: `"hook"`, the
+line a short opens on, as said; compile and QA hold the cut to it.
 
 ## 5. Compile and render
 
@@ -125,6 +126,7 @@ second line is kept current.
 | `fragments` | voice-level sound past the kept words at a cut *and* Whisper hears a word there that the edit doesn't have |
 | `speech_cuts` | a speech cut lands mid-sentence (not marked `abrupt`) or keeps less air than its class's minimum |
 | `short_segments` | anything on screen under 1 s |
+| `hook` | a cut with `[hook]` (shorts) opens on speech with a run-up word first, a halting line in its first seconds, or another line than the edit's `"hook"` (a first sentence that lands late warns) |
 | `text_faces`, `safe_zone` | burned text over a face more than 10% of its time; outside the platform safe zone (vertical) |
 | `text_readable`, `shot_readable` | a text up less than its reading time; a shot under its hold (warn) |
 | `privacy` | streams: a secret, an e-mail, a notification or a `never_show` word on screen (OCR every 2 s) or said aloud |
