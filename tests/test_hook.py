@@ -67,6 +67,8 @@ def test_a_halting_line_fails_and_a_late_landing_warns(sources):
     assert "lands at" in found[1][2] and len(warned) == 2 and "QA fails it" in warned[0] and "QA fails it" not in warned[1]
     tl, (found, _), _ = _cut(sources, {"from": 6, "to": 14, "cut": [[11, 11]]})  # one long sentence, said in one go
     assert found == [] and [x[0] for x in opening(tl, sources, {**HOOK, "seconds": 2.0})[0]] == ["warn"]
+    _, (found, how), _ = _cut(sources, {"from": 1, "to": 10, "keep": ["pauses"]})  # "...is wrong." and then a beat
+    assert found == [] and "lands at 1.2s" in how  # what follows the opening line is pacing, not the hook
 
 
 def test_a_picture_led_opening_is_the_editors_call(sources):

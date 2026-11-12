@@ -279,10 +279,11 @@ def carries_on(W: list[dict], last: int, first: int) -> bool:
 def opening(tl: dict, sources: dict, hook: dict) -> tuple[list[tuple[str, float, str]], str]:
     """How the cut opens, against the profile's [hook]: ((severity, output time, what's wrong) for each problem, a line
     that describes the opening). The first seconds decide whether anyone stays, so a cut that opens on speech opens on
-    its line: never on a run-up (a filler, or the words in `preamble`), said in one go (in the first `seconds`, never
-    more than `pause_max` from one word's start to the next: aligned word ends can't be trusted to show a pause), and
-    on the line the edit names as its "hook", if it names one. The first sentence should land inside those seconds (a
-    warning: a long one can still be the hook). A cut that opens on a picture isn't judged."""
+    its line: never on a run-up (a filler, or the words in `preamble`), with its first sentence said in one go (in
+    the first `seconds`, never more than `pause_max` from one word's start to the next: aligned word ends can't be
+    trusted to show a pause), and on the line the edit names as its "hook", if it names one. That sentence should land
+    inside those seconds (a warning: a long one can still be the hook); what comes after it is pacing, not the hook.
+    A cut that opens on a picture isn't judged."""
     import difflib
     from .transcribe import norm
     F = Fraction(tl["fps"])
@@ -305,17 +306,19 @@ def opening(tl: dict, sources: dict, hook: dict) -> tuple[list[tuple[str, float,
     if mine and difflib.SequenceMatcher(a=mine, b=line[:len(mine)], autojunk=False).ratio() < 0.6:
         out.append(("fail", said[0][0], f"the edit's hook is {tl['hook']!r} but the cut opens on "
                     f"{' '.join(w['t'] for *_, w in said[:len(mine)])!r}: start the first clip on it, or correct the hook"))
-    gap, at, after = max(((b[0] - a[0], a[0], a[2]["t"]) for a, b in zip(said, said[1:]) if b[0] <= win),
+    k = next((k for k, (_, _, w) in enumerate(said) if ends_sentence(w["t"])), None)
+    first = said[:len(said) if k is None else k + 1]  # the opening line: the first sentence
+    gap, at, after = max(((b[0] - a[0], a[0], a[2]["t"]) for a, b in zip(first, first[1:]) if b[0] <= win),
                          default=(0.0, 0.0, ""))
     if gap > float(hook.get("pause_max", 1.0)):
         out.append(("fail", at, f"{gap:.1f}s from {after!r} to the next word, in the first {win:g}s: open on a line said "
                     "in one go"))
-    land = next((e for _, e, w in said if ends_sentence(w["t"])), None)
+    land = None if k is None else said[k][1]
     if land is None or land > win:
         out.append(("warn", 0.0, "the opening line " + (f"lands at {land:.1f}s" if land else "never ends a sentence")
                     + f": a hook is one short sentence, inside the first {win:g}s"))
     return out, (f"opens on {' '.join(w['t'] for *_, w in said[:8])!r}: first sentence lands at "
-                 + (f"{land:.1f}s" if land else "no point") + f", slowest word to word {gap:.2f}s in the first {win:g}s")
+                 + (f"{land:.1f}s" if land else "no point") + f", slowest word to word in it {gap:.2f}s")
 
 
 def _trailing(W: list[dict], k: int, a: int, b: int) -> bool:
