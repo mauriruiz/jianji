@@ -39,6 +39,32 @@ PROMPT = ("This is one frame of a programming livestream. In one short line: whi
           "diagram topic). No preamble.")
 
 
+def marks_for(video: Path) -> list[tuple[float, str]]:
+    """Marks made by hand while recording (a button, a hotkey): a text file next to the recording and named after
+    it (`<name>.marks` or `<name>.<ext>.marks`), one mark per line: seconds or [h:]mm:ss from the start of the
+    file, then an optional note. A recording linked into footage/ is looked up where it really is, too. Lines that
+    aren't a time are skipped."""
+    for f in dict.fromkeys(x for v in (video.resolve(), video) for x in (v.with_suffix(".marks"), Path(f"{v}.marks"))):
+        if not f.is_file():
+            continue
+        out = []
+        for line in f.read_text(errors="replace").splitlines():
+            m = re.match(r"\s*((?:\d+:){0,2}\d+(?:[.,]\d+)?)(?:\s+(.*))?$", line)
+            if m:
+                t = 0.0
+                for part in m.group(1).replace(",", ".").split(":"):
+                    t = t * 60 + float(part)
+                out.append((t, (m.group(2) or "").strip()[:80]))
+        return sorted(out)
+    return []
+
+
+def cues_in(text: str, marked: bool = False) -> list[str]:
+    """The cues of one minute: said aloud (CUES), and "mark" too when a mark from the marks file falls in it."""
+    cues = [c for c, rx in CUES if re.search(rx, text, re.I)]
+    return cues + ["mark"] if marked and "mark" not in cues else cues
+
+
 def classify(lines: list[str]) -> str:
     """The app with the most matches (a status bar or an overlay always on screen mustn't decide alone); the editor
     needs three: one keyword shows up anywhere."""
@@ -108,6 +134,7 @@ def stream_map(p: Project) -> Path:
     shots = ocr(p, video, 1 / step, width=1600, fast=True)
     act = _activity(p, video, step)
     never, allow = p.cfg.get("never_show", []), p.cfg["stream"].get("allow_emails", [])
+    marks = marks_for(video)
     bins = []
     for m in range(int(e["dur"] // 60) + 1):
         a, z = m * 60, (m + 1) * 60
@@ -121,7 +148,7 @@ def stream_map(p: Project) -> Path:
         bins.append({"t": a, "words": len(said), "screen": max(set(apps), key=apps.count) if apps else "-",
                      "files": sorted(set(FILES.findall(" ".join(lines))))[:5],
                      "title": [ln[0] for f in fs[:1] for ln in f["text"] if ln[4] < 0.06][:3],
-                     "said": " ".join(said[:16]), "cues": [c for c, rx in CUES if re.search(rx, text, re.I)],
+                     "said": " ".join(said[:16]), "cues": cues_in(text, any(a <= t < z for t, _ in marks)),
                      "change": round(max((act[k][0] for k in ks if k < len(act)), default=0), 2),
                      "box": [round(float(np.median([b[i] for b in boxes])), 2) for i in range(4)] if boxes else None,
                      "private": [(f["t"], *x) for f in fs for x in private(f["text"], never, allow)]})
@@ -153,9 +180,11 @@ def stream_map(p: Project) -> Path:
     out.write_text(
         f"# Stream: {p.name} ({_mmss(e['dur'])}, source {sid})\n\nOne row per minute: words spoken, what's on screen "
         f"(OCR every {step:g} s; ↺ a big change of picture), files or window titles seen, the first words said, cues "
-        "said aloud (topic, mark, goal, chat, works, recap). Read it to write jianji/stream_map.md: spans, threads, "
+        "said aloud (topic, mark, goal, chat, works, recap; mark also from the marks file). Read it to write jianji/stream_map.md: spans, threads, "
         "chapters (see the jian-edit skill, Streams).\n\n" + "\n".join(rows)
         + "\n\n## At each change of screen (vision model)\n" + ("\n".join(notes) or "- (vision model off)")
+        + ("\n\n## Marks (made while recording: what just happened is worth keeping)\n"
+           + "\n".join(f"- {_mmss(t)}{' ' + note if note else ''}" for t, note in marks) if marks else "")
         + "\n\n## Privacy (OCR every map step; QA re-reads the cut every 2 s)\n" + ("\n".join(priv) or "- nothing found")
         + "\n\n## Where the activity is, on code (for zoom: `crop`)\n" + ("\n".join(code) or "- (none)") + "\n")
     print(out)

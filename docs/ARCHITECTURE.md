@@ -138,7 +138,7 @@ second line is kept current.
 
 `jian map` reads a long stream at keyframes only: per minute, the words spoken, what's on screen (OCR every
 `map_step` seconds, classified as editor, terminal, browser or diagram), file and window names, cues said aloud
-(`docs/STREAMING.md`), the vision model's note at each change of screen, where the picture changes (for zooms) and
+(`docs/STREAMING.md`) and the marks of a `<recording>.marks` file, the vision model's note at each change of screen, where the picture changes (for zooms) and
 privacy hits. The editor turns it into spans and threads and tells 2-4 threads as mini-arcs, with chapter cards,
 context texts, sped-up bridges over room tone and zooms on code. A file with an audio track named mic, voz or voice
 uses that track for speech.

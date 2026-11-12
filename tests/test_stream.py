@@ -76,3 +76,20 @@ def test_emails_on_screen_tight_and_allowed():
     assert seen("Author: dev <123+dev@users.noreply.github.com>") == []
     assert seen("contact me@example.org", ["Me@Example.org"]) == []
     assert seen("me@example.org and boss@example.org", ["me@example.org"]) == ["email"]
+
+
+def test_marks_made_while_recording_count_as_mark_that(tmp_path):
+    from jianji.stream import cues_in, marks_for
+    rec = tmp_path / "obs" / "2026-03-01 22-30-05.mkv"
+    rec.parent.mkdir()
+    rec.touch()
+    assert marks_for(rec) == []
+    rec.with_suffix(".marks").write_text("# pressed on stream\n3761.5\n1:02:41 the grid renders\n\n62:05,25\nlater, maybe\n12\n")
+    marks = [(12.0, ""), (3725.25, ""), (3761.0, "the grid renders"), (3761.5, "")]
+    assert marks_for(rec) == marks
+    link = tmp_path / "video" / "footage" / rec.name  # as `jian ingest` leaves it: the marks stay by the recording
+    link.parent.mkdir(parents=True)
+    link.symlink_to(rec)
+    assert marks_for(link) == marks
+    assert cues_in("ok, it works now", marked=True) == ["works", "mark"] and cues_in("nothing said", marked=True) == ["mark"]
+    assert cues_in("mark that, it works", marked=True) == ["mark", "works"] and cues_in("nothing said") == []
