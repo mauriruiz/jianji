@@ -9,7 +9,7 @@ import pytest
 NIGHT = Path(__file__).parent.parent / "scripts" / "night.sh"
 JIAN = '''#!/bin/sh
 echo "jian $*" >> "$CALLS"
-[ "$1" = status ] && printf '%s  profile=stream  outline_checkpoint=False\\nwork folder: %s  style guide: %s\\n' "$VIDEO" "$VIDEO/jianji" "${STYLE:-none for this profile}"
+[ "$1" = status ] && printf '%s  profile=stream  outline_checkpoint=False\\nwork folder: %s  style guide: none\\n' "$VIDEO" "$VIDEO/jianji"
 [ "$1" = "${JIAN_FAILS:-}" ] && exit 3
 exit 0
 '''
@@ -77,6 +77,23 @@ def test_a_failed_prep_stops_the_night(night):
     assert r.returncode == 1 and calls == ["jian status V", "jian prep V"] and argv == []
 
 
+def test_the_recap_gets_the_style_guide_it_cannot_read(night, tmp_path):
+    video, run = night
+    guide = tmp_path / "layer" / "styles" / "stream.md"  # the user's layer: outside the video folder
+    guide.parent.mkdir(parents=True)
+    guide.write_text("# My stream guide\nTell it by threads, never by the clock.\n")
+    mine = tmp_path / "jian-with-a-guide"  # a jian whose status names that guide
+    mine.write_text((tmp_path / "jian").read_text().replace("style guide: none", f"style guide: {guide}"))
+    mine.chmod(0o755)
+    r, calls, argv = run(JIAN=str(mine))  # the shorts skill carries its own rules
+    assert argv[1].startswith("\n# /jian-shorts") and "My stream guide" not in argv[1]
+    r, calls, argv = run(NIGHT_RECAP="1", JIAN=str(mine))
+    assert r.returncode == 0 and argv[1].startswith("\n# /jian-edit")
+    assert argv[1].rstrip().endswith("Tell it by threads, never by the clock.") and "outside the folders you can read" in argv[1]
+    r, calls, argv = run(NIGHT_RECAP="1")  # a profile with no guide
+    assert r.returncode == 0 and "outside the folders" not in argv[1]
+
+
 def test_one_night_per_video_and_a_step_has_a_time_limit(night):
     video, run = night
     lock = video / "jianji" / "night.lock"
@@ -92,16 +109,3 @@ def test_one_night_per_video_and_a_step_has_a_time_limit(night):
     assert r.returncode == 1 and "already running" not in r.stderr and calls[-1] == "jian queue --announce"
     assert "shorts: FAILED (143)" in (video / "jianji" / "night.log").read_text()  # stopped at its limit, not after 30 s
 
-
-def test_the_recap_gets_the_style_guide_it_cannot_read(night, tmp_path):
-    video, run = night
-    guide = tmp_path / "layer" / "styles" / "stream.md"  # the user's layer: outside the video folder
-    guide.parent.mkdir(parents=True)
-    guide.write_text("# My stream guide\nTell it by threads, never by the clock.\n")
-    r, calls, argv = run(NIGHT_RECAP="1", STYLE=str(guide))
-    assert r.returncode == 0 and argv[1].startswith("\n# /jian-edit")
-    assert argv[1].rstrip().endswith("Tell it by threads, never by the clock.") and "outside the folders you can read" in argv[1]
-    r, calls, argv = run(STYLE=str(guide))  # the shorts skill carries its own rules
-    assert argv[1].startswith("\n# /jian-shorts") and "My stream guide" not in argv[1]
-    r, calls, argv = run(NIGHT_RECAP="1")  # a profile with no guide
-    assert r.returncode == 0 and "outside the folders" not in argv[1]
