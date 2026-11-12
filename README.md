@@ -158,8 +158,8 @@ sheets, a frame at a cut). Nothing is uploaded anywhere else.
 - **Unattended runs are locked down instead.** `scripts/night.sh <video>` processes a stream with nobody watching:
   prep and map, then Claude Code headless cutting the shorts (`NIGHT_RECAP=1`: the recap too), with no web tools,
   agents, MCP servers or user settings; Bash limited to the jian commands an edit needs (not `ingest`, `approve`,
-  `reject`, `queue` or `hook`); reads limited to the video folder and writes to its work folder; everything else
-  denied without asking. That is the supported way to edit a stream with public chat without watching it. It never
+  `reject`, `queue` or `hook`); reads limited to the video folder and writes to its work folder (the recap's style
+  guide, which lives outside both, is handed over with its instructions); everything else denied without asking. That is the supported way to edit a stream with public chat without watching it. It never
   approves, publishes or deletes anything: the shorts wait in `jian queue` for a person.
 - **Model downloads are pinned.** Every Hugging Face model is downloaded at an exact commit, as safetensors, and no
   pickle file is fetched from those repos. The Spanish, French, German and Italian aligners only publish a pickle,
