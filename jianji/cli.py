@@ -19,7 +19,10 @@
   jian status <video>               what exists, what's next
   jian log <video> <key> <value>    record review_minutes, feedback etc. in metrics.json
   jian report [root]                scoreboard: review minutes, versions, QA, machine time, per video
+  jian hook <event> [KEY=VALUE]...  run your hook for an event by hand (to try it, or from your own scripts)
   jian doctor                       check the install and your layer (~/.config/jianji) against this version
+
+Hooks: `[hooks] on_ingest | on_error = "command"` in your layer's config.toml; the facts arrive as JIAN_* variables.
 """
 from __future__ import annotations
 
@@ -385,6 +388,8 @@ def ingest(file_arg: str | None, profile: str | None = None, name: str | None = 
     new(str(d), profile or cfg.get("profile", "stream"))
     if not link.is_symlink():
         link.symlink_to(src)
+    from .core import hook
+    hook("ingest", video=d.name, dir=d, source=src)
     print(d)  # last line: the video folder, for scripts
     return d
 
@@ -592,7 +597,29 @@ def main(argv=None):
     lg.add_argument("video")
     lg.add_argument("key")
     lg.add_argument("value")
+    hk = sub.add_parser("hook")
+    hk.add_argument("event")
+    hk.add_argument("facts", nargs="*", metavar="KEY=VALUE")
     args = ap.parse_args(argv)
+    try:
+        return _run(args)
+    except BaseException as e:  # a failed run tells your on_error hook (a night run nobody watches), then fails as before
+        code = e.code if isinstance(e, SystemExit) else repr(e)
+        if code not in (None, 0) and args.cmd not in ("doctor", "hook") and not isinstance(e, KeyboardInterrupt):
+            from .core import hook
+            try:
+                hook("error", command=args.cmd, video=getattr(args, "video", None), error=code)
+            except Exception:  # a broken config.toml: the original failure is the one to show
+                pass
+        raise
+
+
+def _run(args):
+    if args.cmd == "hook":
+        from .core import hook
+        if any("=" not in x for x in args.facts):
+            die("facts are KEY=VALUE")
+        return hook(args.event, **{k.lower(): v for k, v in (x.split("=", 1) for x in args.facts)})
     if args.cmd == "new":
         return new(args.video, args.profile)
     if args.cmd == "ingest":
