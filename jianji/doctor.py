@@ -1,6 +1,7 @@
 """`jian doctor`: is the install complete, and does your layer (~/.config/jianji) match this version of jian?"""
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -48,6 +49,10 @@ def check() -> tuple[list[str], list[str]]:
         notes.append(f"no videos_root in {GLOBAL_CONFIG}: `jian new <name>` needs a full path")
     elif not Path(root).expanduser().is_dir():
         bad.append(f"videos_root {root} doesn't exist (external drive not mounted?)")
+    for k, v in global_config().get("hooks", {}).items():
+        exe = Path((shlex.split(v) if isinstance(v, str) else v or [""])[0]).expanduser() if k.startswith("on_") else None
+        if exe is not None and not shutil.which(str(exe)):
+            bad.append(f"{GLOBAL_CONFIG} [hooks] {k}: {exe} isn't an executable (chmod +x, or the full path)")
     if not shutil.which(FFMPEG):
         bad.append("ffmpeg not found: brew install ffmpeg-full")
     else:
@@ -57,7 +62,7 @@ def check() -> tuple[list[str], list[str]]:
     if not shutil.which("swiftc"):
         notes.append("no swiftc: text placement and OCR need the Xcode command line tools (xcode-select --install)")
     skills = Path("~/.claude/skills").expanduser()
-    for sk in ("jian-edit", "jian-revise"):
+    for sk in ("jian-edit", "jian-revise", "jian-shorts"):
         if not (skills / sk / "SKILL.md").exists():
             notes.append(f"skill /{sk} not installed: ln -s {PKG.parent / '.claude' / 'skills' / sk} {skills / sk}")
     return bad, notes

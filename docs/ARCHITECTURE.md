@@ -25,6 +25,8 @@ fades, gaps) and checks the result.
     renders/               master, review, final, captions, timeline and QA per version
     resolve/               FCPXML, text box PNGs, manifest, IMPORT.md, from-resolve/
     review.md feedback.log metrics.json diffs/
+    shorts/<n>/            a short cut out of this video (`--short <n>`): its own config.toml, edits/, renders/,
+                           resolve/ and preview.mp4; cache/ and catalog.json are links to the video's
 
 ~/.config/jianji/          your layer (see section 8)
 ```
@@ -87,7 +89,8 @@ Every Hugging Face model is pinned to an exact commit and loaded as safetensors 
 
 Speech is chosen by word id and never by timestamp. Clips play in list order; overlays (B-roll) and texts anchor to a
 clip and a word or an offset. Optional per clip: `"abrupt": "<why>"` (a tight cut at a topic jump), `"keep"`,
-`"fix"` (caption spelling), `"speed"`, `"crop"`, `"blur"`. After a pull, items carry `"locked"` (your hand edit in
+`"fix"` (caption spelling), `"speed"`, `"crop"`, `"blur"`, `"layout"` (two regions of the source one over the
+other, section 7). After a pull, items carry `"locked"` (your hand edit in
 Resolve) or `"pinned"` (jian's own cut, frozen at the frames you saw).
 
 ## 5. Compile and render
@@ -140,6 +143,43 @@ privacy hits. The editor turns it into spans and threads and tells 2-4 threads a
 context texts, sped-up bridges over room tone and zooms on code. A file with an audio track named mic, voz or voice
 uses that track for speech.
 
+**Shorts out of a stream.** `--short <n>` on compile, cut, qa, cuts, texts, resolve, at and status works in
+`jianji/shorts/<n>/`: a cut of its own (profile `short`, 1080x1920) that shares the video's catalog, transcripts and
+render cache, and keeps its speech and privacy settings. A clip with `"layout": "<name>"` is rendered as two panels,
+each a region of the source cover-fitted to its box:
+
+```toml
+# ~/.config/jianji/config.toml
+[layouts.code]
+top = [0.75, 0.72, 1.0, 1.0]       # the webcam in your scene, as [x0, y0, x1, y1] of the recording (0-1)
+bottom = [0.14, 0.02, 0.62, 0.98]  # the editor; a clip's own "crop" replaces it
+split = 0.36                       # the top panel's share of the height
+note = "editor full screen"        # shown by `jian status --short`
+
+[outro]
+text = "Live Mon-Thu 22:30"        # over the last seconds of every cut of these profiles; "\n" breaks the line
+seconds = 3                        # at least; never less than its reading time
+style = "hi"                       # txt | hi | chat | chapter
+profiles = ["short"]
+```
+
+Every `jian cut --short` also writes `preview.mp4` (540 px wide, H.264, under `[render] preview_mb`) to judge the
+short on a phone. In the FCPXML a two-panel clip is the same frames twice: the bottom panel on V1, the top one on
+V2, each with a trim (`adjust-crop`), a "fill" conform and a transform, in the units Resolve reads them in
+(`resolve._units`: not the textbook ones when the source isn't shaped like the timeline). `jian pull` doesn't read
+two-panel cuts back yet.
+
+**The queue.** A short whose latest cut is rendered and didn't fail QA is a candidate, `<video>:<n>`:
+
+| Command | What it does |
+|---|---|
+| `jian queue [--json] [--all]` | the candidates: id, title, seconds, QA, the preview's path. `--all` adds the judged, the failed and the unrendered. `--announce` fires `on_queue_ready` when something waits |
+| `jian approve <id>` | writes `<[queue] upload>/<video>-<n> <title>/`: the FCPXML on the original recording, its text boxes, the captions, `IMPORT.md`, `preview.mp4`, `title.txt`. No final render: that happens in Resolve, by hand. A failed or unchecked short needs `--force` |
+| `jian reject <id>` | takes it off the list. Nothing is deleted; a new cut of it is a candidate again |
+| `jian queue --protected` | the recordings a waiting short still needs (cited by a timeline in the upload folder, or by a candidate): what a clean-up of yours must not delete. Moving a folder out of the upload folder releases its recording |
+
+The state is one file, `shorts/<n>/state.json`. `jian clean` never deletes footage, protected or not.
+
 ## 8. Configuration layers
 
 Lowest to highest:
@@ -147,6 +187,10 @@ Lowest to highest:
 1. **Built-in** (`jianji/profiles/*.toml`, `jianji/styles/*.md`), shipped with the code.
 2. **Your layer**, `~/.config/jianji/` (or `$JIANJI_HOME`):
    - `config.toml`: `schema`, `videos_root`, `[defaults]` for every profile;
+   - `config.toml` `[ingest]`: `watch` (where recordings land), `name` and `profile` for `jian ingest`;
+   - `config.toml` `[hooks]`: your command for an event (below);
+   - `config.toml` `[layouts.<name>]` and `[outro]`: two-panel layouts and a closing line for shorts (section 7);
+   - `config.toml` `[queue]`: `upload`, the folder `jian approve` writes to;
    - `profiles/<name>.toml`: only the keys you change, or a new profile;
    - `styles/<name>.md`: your editorial rules (replace the built-in guide for that profile);
    - `brand.toml`: fonts and colours for every profile;
@@ -154,6 +198,28 @@ Lowest to highest:
    - `briefs/<profile>.md` or `briefs/default.md`: your brief template for `jian new`;
    - `extensions/<name>.toml`: settings for a series, pulled in by `extends: <name>` in a brief.
 3. **Per video**: `jianji/config.toml`, then brief.md front matter (`section.key: value`).
+
+**Hooks** connect jian to whatever you use (a notifier, a queue, a chat bot) without jian knowing about it:
+
+```toml
+[hooks]
+on_ingest = "~/.config/jianji/hooks/ingest.sh"   # a command line (no shell) or a list
+on_error = ["notify", "--title", "jian failed"]
+timeout = 30                                     # seconds, for every hook
+```
+
+| Event | When | Facts (`JIAN_EVENT` is always set) |
+|---|---|---|
+| `on_ingest` | `jian ingest` made or found a folder | `JIAN_VIDEO`, `JIAN_DIR`, `JIAN_SOURCE` |
+| `on_queue_ready` | `jian queue --announce`, and a short is waiting | `JIAN_COUNT`, `JIAN_VIDEOS` (comma-separated) |
+| `on_approve` | `jian approve <id>` | `JIAN_ID`, `JIAN_VIDEO`, `JIAN_SHORT`, `JIAN_DIR` (the folder made) |
+| `on_reject` | `jian reject <id>` | `JIAN_ID`, `JIAN_VIDEO`, `JIAN_SHORT` |
+| `on_error` | any command failed | `JIAN_COMMAND`, `JIAN_VIDEO`, `JIAN_ERROR` |
+
+The facts travel as environment variables and are never put on a command line, so a name or an error message that
+came out of a video can't run as shell. Treat them the same way in your script: quote them, and don't forward text
+you don't trust to anything that acts on it. A hook that fails, hangs past `timeout` or is missing prints a warning
+and the run carries on. `jian hook <event> KEY=VALUE...` fires one by hand; `jian doctor` checks each command exists.
 
 `schema` versions the layer's format. When a release changes it, `jian doctor` says what to edit; it also flags keys
 that no built-in profile knows (typos, renamed options) and profiles without a style guide.

@@ -21,3 +21,31 @@ def pytest_collection_modifyitems(config, items):
     for it in items:
         if "models" in it.keywords:
             it.add_marker(skip)
+
+
+def quadrants(path, secs: int = 4):
+    """A synthetic recording: four coloured quadrants (blue, red / green, yellow), 1280x720, and a tone."""
+    import subprocess
+    from jianji.core import FFMPEG
+    quad = ";".join(f"color=c={c}:s=640x360:r=30[{k}]" for k, c in zip("abcd", ("blue", "red", "green", "yellow")))
+    subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", f"{quad};[a][b]hstack[t];[c][d]hstack[u];[t][u]vstack",
+                    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", str(secs), "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", path], check=True)
+    return path
+
+
+def cut_short(d, config: str, edit: dict):
+    """Short 1 of the video folder `d`, cut and rendered without QA (no models). -> (the video, the short)."""
+    import json
+    from jianji import cli
+    from jianji.core import Project
+    from jianji.media import build_catalog
+    video = Project(str(d))
+    build_catalog(video)
+    out = Project(str(d), short="1").out
+    (out / "config.toml").write_text(config)
+    (out / "edits").mkdir()
+    (out / "edits" / "edit.v001.json").write_text(json.dumps(edit))
+    p = Project(str(d), short="1")
+    cli.cut(p, None, qa=False)
+    return video, p

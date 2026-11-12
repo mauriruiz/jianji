@@ -1,6 +1,7 @@
 """jian: the deterministic half of the pipeline. Never calls an LLM.
 
   jian new <name> [--profile P]     create <videos_root>/<name>/footage/ and a brief.md template
+  jian ingest [file] [--name N]     a finished recording -> a dated video folder linked to it (the file is never touched)
   jian prep <video>                 probe, transcribe, pack (cached; resumes where it stopped)
   jian map <video>                  a long stream, minute by minute (speech, screen, files, cues, privacy): stream.md
   jian words <video> <src> <a> <b>  word-level ids for a range
@@ -18,7 +19,17 @@
   jian status <video>               what exists, what's next
   jian log <video> <key> <value>    record review_minutes, feedback etc. in metrics.json
   jian report [root]                scoreboard: review minutes, versions, QA, machine time, per video
+  jian queue [--json] [--all]       shorts waiting for your yes or no (--announce: tell your on_queue_ready hook)
+  jian approve <id> [--force]       a short into your upload folder as a Resolve project (never a final render)
+  jian reject <id>                  a short out of the queue (nothing is deleted)
+  jian hook <event> [KEY=VALUE]...  run your hook for an event by hand (to try it, or from your own scripts)
+
+Shorts out of a long video: compile, cut, qa, cuts, texts, resolve, at and status take `--short <n>` and work in
+<video>/jianji/shorts/<n>/ (its own edits and renders, the video's transcripts and cache; profile `short`).
   jian doctor                       check the install and your layer (~/.config/jianji) against this version
+
+Hooks: `[hooks] on_ingest | on_queue_ready | on_approve | on_reject | on_error = "command"` in your layer's
+config.toml; the facts arrive as JIAN_* variables.
 """
 from __future__ import annotations
 
@@ -114,7 +125,7 @@ def _edit(p: Project, arg: str | None) -> tuple[dict, int]:
 
 
 def compile_edit(p: Project, edit_arg: str | None, sources: dict) -> tuple[dict, int]:
-    from .compile import EditError, compile_timeline
+    from .compile import EditError, add_outro, compile_timeline
     from .media import motion
     edit, v = _edit(p, edit_arg)
     cat = read_json(p.out / "catalog.json")
@@ -122,7 +133,11 @@ def compile_edit(p: Project, edit_arg: str | None, sources: dict) -> tuple[dict,
         if "in" in c and c.get("src") in sources and "motion" not in sources[c["src"]]:
             sources[c["src"]]["motion"] = motion(p, c["src"], cat["sources"][c["src"]])
     try:
-        tl = compile_timeline(edit, sources, p.cfg["cut"], p.cfg.get("timeline"), p.cfg.get("texts"), p.cfg.get("shots"))
+        tl = compile_timeline(edit, sources, p.cfg["cut"], p.cfg.get("timeline"), p.cfg.get("texts"), p.cfg.get("shots"),
+                              p.cfg.get("layouts"))
+        outro = p.cfg.get("outro") or {}
+        if p.profile in outro.get("profiles", ["short"]):  # your closing line, on the profiles you want it on
+            tl = add_outro(tl, outro, p.cfg.get("texts"))
     except EditError as e:
         die(f"edit v{v:03d} rejected: {e}")
     write_json(p.path("renders", f"timeline.v{v:03d}.json"), tl)
@@ -172,6 +187,10 @@ def cut(p: Project, edit_arg: str | None, qa: bool = True):
         run_qa_cmd(p, v, tl, sources, outs, reuse=read_json(d / f"qa.v{reuse:03d}.json") if reuse else None)
     from .resolve import export  # every cut also opens in Resolve: jianji/resolve/IMPORT.md
     export(p, v)
+    if p.short:  # a short out of a long video is a candidate: a light copy to judge it on a phone
+        from .render import preview
+        mb = float(p.cfg["render"].get("preview_mb", 8))
+        print(f"preview {preview(Path(outs['final']), p.out / 'preview.mp4', tl['stats']['seconds'], mb)}")
 
 
 def run_qa_cmd(p: Project, v: int, tl: dict | None = None, sources: dict | None = None, outs: dict | None = None,
@@ -296,6 +315,13 @@ def status(p: Project):
         qa = read_json(p.out / "renders" / f"qa.v{v:03d}.json")
         print(f"  v{v:03d}: rendered={'yes' if (p.out / 'renders' / f'master.v{v:03d}.mp4').exists() else 'no'}"
               f"  qa={qa['status'] if qa else '-'}")
+    if p.short:  # what the editor of a short needs: the two-panel layouts you defined, and their regions
+        print("layouts: " + ("; ".join(f"{k} (top {v.get('top')}, bottom {v.get('bottom')}"
+                                       f"{', ' + str(v['note']) if v.get('note') else ''})"
+                                       for k, v in (p.cfg.get("layouts") or {}).items()) or "none defined"))
+    shorts = sorted(x.name for x in (p.out / "shorts").glob("*") if x.is_dir())
+    if shorts:
+        print(f"shorts: {', '.join(shorts)}  (jian status {p.dir.name} --short <n>)")
     free = shutil.disk_usage(p.out).free / 1e9
     print(f"disk: {free:.0f} GB free (minimum {p.cfg['disk']['min_free_gb']})")
 
@@ -352,6 +378,42 @@ def new(arg: str, profile: str):
             tpl = tpl.replace("{" + k + "}", v)
         brief.write_text(tpl)
     print(f"{d}\n  footage: {d if at_root else d / 'footage'}\n  brief:   {brief}")
+
+
+def ingest(file_arg: str | None, profile: str | None = None, name: str | None = None) -> Path:
+    """A finished recording becomes a video folder: <videos_root>/<date>-<slug>/ with your brief template and, in
+    footage/, a link to the recording. The recording is never moved, renamed or written to. With no file, the newest
+    recording in `[ingest] watch` (config.toml in your layer). Again on the same recording: the same folder."""
+    from datetime import datetime
+    from .core import global_config
+    from .media import MEDIA_EXT
+    cfg = global_config().get("ingest", {})
+    if file_arg:
+        src = Path(file_arg).expanduser()
+    else:
+        watch = Path(cfg.get("watch") or die("no recording given and no [ingest] watch folder in your config.toml")).expanduser()
+        found = [f for f in watch.glob("*") if f.is_file() and f.suffix.lower() in MEDIA_EXT and not f.name.startswith(".")]
+        src = max(found, key=lambda f: f.stat().st_mtime, default=None) or die(f"no recordings in {watch}")
+    src = src.resolve()
+    if not src.is_file() or src.suffix.lower() not in MEDIA_EXT:
+        die(f"not a recording: {src}")
+    m = re.match(r"(\d{4}-\d{2}-\d{2})(.*)", src.stem)  # OBS names a file by when it started; else, when it was written
+    date = m.group(1) if m else datetime.fromtimestamp(src.stat().st_mtime).strftime("%Y-%m-%d")
+    slug = re.sub(r"[^a-z0-9]+", "-", (m.group(2) if m else src.stem).lower()).strip("-")
+    name = name or str(cfg.get("name", "{date}-{slug}")).format(date=date, slug=slug).strip("-")
+    root = os.environ.get("JIANJI_VIDEOS_ROOT") or global_config().get("videos_root") or \
+        die("no videos_root set (JIANJI_VIDEOS_ROOT or config.toml in your layer)")
+    d = Path(root).expanduser().resolve() / name
+    link = d / "footage" / src.name
+    if d.exists() and not (link.is_symlink() and link.resolve() == src):
+        die(f"{d} already exists with other footage: pass --name")
+    new(str(d), profile or cfg.get("profile", "stream"))
+    if not link.is_symlink():
+        link.symlink_to(src)
+    from .core import hook
+    hook("ingest", video=d.name, dir=d, source=src)
+    print(d)  # last line: the video folder, for scripts
+    return d
 
 
 def _reel(p: Project, video: Path, parts: list[tuple[float, float, str]], out: Path, size: list[int]):
@@ -508,8 +570,14 @@ def main(argv=None):
     nw = sub.add_parser("new")
     nw.add_argument("video")
     nw.add_argument("--profile", default="explainer")
+    ig = sub.add_parser("ingest")
+    ig.add_argument("file", nargs="?")
+    ig.add_argument("--profile")
+    ig.add_argument("--name")
     for name in ("prep", "status", "map"):
         sub.add_parser(name).add_argument("video")
+    short = lambda x: x.add_argument("--short", metavar="N", help="work on short N of this video")
+    short(sub.choices["status"])
     w = sub.add_parser("words")
     for a in ("video", "src"):
         w.add_argument(a)
@@ -527,13 +595,16 @@ def main(argv=None):
         c.add_argument("--edit")
         if name == "cut":
             c.add_argument("--no-qa", action="store_true")
+        short(c)
     for name in ("cuts", "texts"):
         cr = sub.add_parser(name)
         cr.add_argument("video")
         cr.add_argument("--v", type=int)
+        short(cr)
     rs = sub.add_parser("resolve")
     rs.add_argument("video")
     rs.add_argument("--v", type=int)
+    short(rs)
     pu = sub.add_parser("pull")
     pu.add_argument("video")
     pu.add_argument("file", nargs="?")
@@ -546,22 +617,65 @@ def main(argv=None):
     q = sub.add_parser("qa")
     q.add_argument("video")
     q.add_argument("--v", type=int)
+    short(q)
     t = sub.add_parser("at")
     t.add_argument("video")
     t.add_argument("tc", nargs="+")
+    short(t)
     lg = sub.add_parser("log")
     lg.add_argument("video")
     lg.add_argument("key")
     lg.add_argument("value")
+    qu = sub.add_parser("queue")
+    qu.add_argument("--json", action="store_true")
+    qu.add_argument("--all", action="store_true", help="also approved, rejected, failed QA and unrendered")
+    qu.add_argument("--announce", action="store_true", help="fire on_queue_ready when something is waiting")
+    qu.add_argument("--protected", action="store_true", help="list the recordings a waiting short still needs")
+    for name in ("approve", "reject"):
+        j = sub.add_parser(name)
+        j.add_argument("id", help="<video>:<n>, as `jian queue` prints it")
+        if name == "approve":
+            j.add_argument("--force", action="store_true", help="even if its QA failed or didn't run")
+    hk = sub.add_parser("hook")
+    hk.add_argument("event")
+    hk.add_argument("facts", nargs="*", metavar="KEY=VALUE")
     args = ap.parse_args(argv)
+    try:
+        return _run(args)
+    except BaseException as e:  # a failed run tells your on_error hook (a night run nobody watches), then fails as before
+        code = e.code if isinstance(e, SystemExit) else repr(e)
+        if code not in (None, 0) and args.cmd not in ("doctor", "hook") and not isinstance(e, KeyboardInterrupt):
+            from .core import hook
+            try:
+                hook("error", command=args.cmd, video=getattr(args, "video", getattr(args, "id", None)), error=code)
+            except Exception:  # a broken config.toml: the original failure is the one to show
+                pass
+        raise
+
+
+def _run(args):
+    if args.cmd == "hook":
+        from .core import hook
+        if any("=" not in x for x in args.facts):
+            die("facts are KEY=VALUE")
+        return hook(args.event, **{k.lower(): v for k, v in (x.split("=", 1) for x in args.facts)})
+    if args.cmd in ("queue", "approve", "reject"):
+        from . import queue as q
+        if args.cmd == "queue":
+            return print("\n".join(q.protected())) if args.protected else q.queue(args.json, args.all, args.announce)
+        q.approve(args.id, args.force) if args.cmd == "approve" else q.reject(args.id)
+        return
     if args.cmd == "new":
         return new(args.video, args.profile)
+    if args.cmd == "ingest":
+        ingest(args.file, args.profile, args.name)
+        return
     if args.cmd == "report":
         return report(args.root)
     if args.cmd == "doctor":
         from .doctor import doctor
         return doctor()
-    p = Project(args.video)
+    p = Project(args.video, getattr(args, "short", None))
     if args.cmd == "prep":
         prep(p)
     elif args.cmd == "map":

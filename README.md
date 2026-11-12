@@ -48,6 +48,12 @@ flowchart LR
   Resolve 21.2 (free). Edit it, export, and `jian pull` brings your changes back as the next version. `jian pull` is
   **experimental**: it's tested on jian's own FCPXML, not yet on a real export from Resolve.
 
+- **Shorts out of a stream**: `/jian-shorts <name>` picks the moments and cuts each as a vertical short, the camera
+  over the screen (two regions of the recording you name once), with a light preview and its own Resolve timeline.
+  `jian queue` lists the candidates; `jian approve <id>` puts one in your upload folder as a Resolve project on the
+  original recording. jian never renders the final file of an approved short and never publishes anything.
+  See [docs/STREAMING.md](docs/STREAMING.md).
+
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Requirements and limits
@@ -124,7 +130,9 @@ settings. Keep your preferences in your layer (a private git repo works well), n
 
 ```
 ~/.config/jianji/
-  config.toml           schema = 1, videos_root, [defaults] for every profile
+  config.toml           schema = 1, videos_root, [defaults] for every profile, [ingest] for recordings,
+                        [hooks] to run your own command on an event, [layouts] and [outro] for shorts,
+                        [queue] for the folder approved shorts go to
   profiles/short.toml   only the keys you change ([cut] max_pause = 0.3), or a whole new profile
   styles/short.md       your editorial rules for that profile (replaces the built-in guide)
   brand.toml            your fonts and colours
@@ -147,6 +155,12 @@ sheets, a frame at a cut). Nothing is uploaded anywhere else.
   reaches Claude as text. The skills treat it as material, never as instructions, but **don't run `/jian-edit` with
   auto-accept** (accept-all mode or `--dangerously-skip-permissions`) on footage you don't fully control, such as a
   stream with public chat: let Claude Code ask before it runs anything.
+- **Unattended runs are locked down instead.** `scripts/night.sh <video>` processes a stream with nobody watching:
+  prep and map, then Claude Code headless cutting the shorts (`NIGHT_RECAP=1`: the recap too), with no web tools,
+  agents, MCP servers or user settings; Bash limited to the jian commands an edit needs (not `ingest`, `approve`,
+  `reject`, `queue` or `hook`); reads limited to the video folder and writes to its work folder; everything else
+  denied without asking. That is the supported way to edit a stream with public chat without watching it. It never
+  approves, publishes or deletes anything: the shorts wait in `jian queue` for a person.
 - **Model downloads are pinned.** Every Hugging Face model is downloaded at an exact commit, as safetensors, and no
   pickle file is fetched from those repos. The Spanish, French, German and Italian aligners only publish a pickle,
   so jian uses Hugging Face's own safetensors conversions of them (the Spanish one checked identical to the

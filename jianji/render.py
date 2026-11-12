@@ -30,7 +30,7 @@ def video_spans(tl: dict) -> list[dict]:
     """Picture track: A-roll pieces with B-roll overlays cut into them, contiguous on the timeline."""
     F = Fraction(tl["fps"])
     ovs = tl.get("overlays", [])
-    look = lambda x: {k: x[k] for k in ("crop", "blur", "speed") if x.get(k)}
+    look = lambda x: {k: x[k] for k in ("crop", "blur", "speed", "stack") if x.get(k)}
     spans = [{"src": o["src"], "in": o["in"], "n": o["n"], "rec": o["rec"], **look(o)} for o in ovs]
     for s in tl["segments"]:
         cur, end = s["rec"], s["rec"] + s["n"]
@@ -49,18 +49,32 @@ def video_spans(tl: dict) -> list[dict]:
     return sorted(spans, key=lambda x: x["rec"])
 
 
+def panels(stack: dict, w: int, h: int) -> list[tuple[list[float], tuple[int, int, int, int]]]:
+    """A stacked clip as (region of the source, box of the frame in pixels) pairs, top then bottom: the frame splits
+    at `split` of its height (an even number of pixels)."""
+    ht = round(float(stack.get("split", 0.36)) * h / 2) * 2
+    return [(stack["top"], (0, 0, w, ht)), (stack["bottom"], (0, ht, w, h))]
+
+
 def picture_filter(s: dict, F, w: int, h: int, pix: str) -> str:
     """Source picture -> one frame of the cut: speed (a sped-up bridge), crop (zoom on the code that matters, as
     [x0, y0, x1, y1] of the source), cover-scale to the frame, then blur boxes ([x0, y0, x1, y1] of the frame:
-    something private on screen)."""
+    something private on screen). A stacked clip (`stack`, from its layout) fills two panels instead, each with its
+    own region of the source."""
     vf = []
     if s.get("speed"):
         vf.append(f"setpts=PTS/{float(s['speed']):g}")
     vf.append(f"fps={F}")
-    if s.get("crop"):
-        x0, y0, x1, y1 = s["crop"]
-        vf.append(f"crop=iw*{x1 - x0:.4f}:ih*{y1 - y0:.4f}:iw*{x0:.4f}:ih*{y0:.4f}")
-    vf.append(f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1")
+    region = lambda r: f"crop=iw*{r[2] - r[0]:.4f}:ih*{r[3] - r[1]:.4f}:iw*{r[0]:.4f}:ih*{r[1]:.4f}"
+    cover = lambda bw, bh: f"scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh}"
+    if s.get("stack"):
+        (top, tb), (bottom, bb) = panels(s["stack"], w, h)
+        vf.append(f"split[pt][pb];[pt]{region(top)},{cover(tb[2] - tb[0], tb[3] - tb[1])}[qt];"
+                  f"[pb]{region(bottom)},{cover(bb[2] - bb[0], bb[3] - bb[1])}[qb];[qt][qb]vstack,setsar=1")
+    else:
+        if s.get("crop"):
+            vf.append(region(s["crop"]))
+        vf.append(cover(w, h) + ",setsar=1")
     chain = ",".join(vf)
     for k, (x0, y0, x1, y1) in enumerate(s.get("blur") or []):
         bw, bh, bx, by = round((x1 - x0) * w), round((y1 - y0) * h), round(x0 * w), round(y0 * h)
@@ -78,7 +92,7 @@ def render_video(p: Project, tl: dict, cat: dict, out: Path, codec: str, q) -> P
     files = []
     for s in spans:
         e = cat["sources"][s["src"]]
-        extra = [s.get(k) for k in ("crop", "blur", "speed") if s.get(k)]
+        extra = [s.get(k) for k in ("crop", "blur", "speed", "stack") if s.get(k)]
         f = p.path("cache", "seg", f"{key(e['fp'], s['in'], s['n'], tl['fps'], w, h, codec, q, pix, *map(str, extra))}.mp4")
         if not f.exists():
             tmp = f.with_suffix(".tmp.mp4")
@@ -453,7 +467,7 @@ def same_picture_and_sound(a: dict | None, b: dict) -> bool:
         return False
     pick = lambda tl: (tl["fps"], tl["size"], tl["frames"],
                        [(s["src"], s["in"], s["n"], s.get("gain_db"), s.get("room"), s.get("tone"), s.get("speed"),
-                         s.get("crop"), s.get("blur")) for s in tl["segments"]],
+                         s.get("crop"), s.get("blur"), s.get("stack")) for s in tl["segments"]],
                        [(o["src"], o["in"], o["n"], o["rec"], o.get("gain_db"), o.get("crop"), o.get("blur"))
                         for o in tl.get("overlays", [])])
     return pick(a) == pick(b)
@@ -467,6 +481,17 @@ def safe_zone_box(cfg: dict, w: int, h: int, scale: float) -> str | None:
     x, y = round(z["left"] * k), round(z["top"] * k)
     return (f"drawbox=x={x}:y={y}:w={round(w * scale - (z['left'] + z['right']) * k)}:"
             f"h={round(h * scale - (z['top'] + z['bottom']) * k)}:color=white@0.35:t=2")
+
+
+def preview(video: Path, out: Path, secs: float, mb: float = 8.0) -> Path:
+    """A light copy to watch on a phone or send in a chat: 540 px on its short side, H.264 + AAC, under `mb` MB."""
+    kbps = max(150, min(1500, int(mb * 8000 * 0.92 / max(secs, 1.0)) - 96))  # 0.92: container overhead and rate slack
+    tmp = out.with_suffix(".tmp.mp4")
+    run([FFMPEG, "-v", "error", "-y", "-i", video, "-vf", "scale='if(gt(iw,ih),-2,540)':'if(gt(iw,ih),540,-2)'",
+         "-c:v", "libx264", "-preset", "veryfast", "-b:v", f"{kbps}k", "-maxrate", f"{kbps}k", "-bufsize", f"{2 * kbps}k",
+         "-pix_fmt", "yuv420p", "-c:a", "aac_at", "-b:a", "96k", "-movflags", "+faststart", tmp])
+    tmp.replace(out)
+    return out
 
 
 def render(p: Project, tl: dict, cat: dict, sources: dict, v: int, reuse_master: Path | None = None) -> dict:
