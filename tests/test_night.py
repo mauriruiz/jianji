@@ -108,4 +108,3 @@ def test_one_night_per_video_and_a_step_has_a_time_limit(night):
     r, calls, _ = run(NIGHT_SHORTS_TIMEOUT="1", CLAUDE=str(slow))
     assert r.returncode == 1 and "already running" not in r.stderr and calls[-1] == "jian queue --announce"
     assert "shorts: FAILED (143)" in (video / "jianji" / "night.log").read_text()  # stopped at its limit, not after 30 s
-
