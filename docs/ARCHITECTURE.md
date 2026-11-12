@@ -157,7 +157,7 @@ split = 0.36                       # the top panel's share of the height
 note = "editor full screen"        # shown by `jian status --short`
 
 [outro]
-text = "Live Mon-Thu 22:30"        # over the last seconds of every cut of these profiles
+text = "Live Mon-Thu 22:30"        # over the last seconds of every cut of these profiles; "\n" breaks the line
 seconds = 3                        # at least; never less than its reading time
 style = "hi"                       # txt | hi | chat | chapter
 profiles = ["short"]
@@ -165,7 +165,9 @@ profiles = ["short"]
 
 Every `jian cut --short` also writes `preview.mp4` (540 px wide, H.264, under `[render] preview_mb`) to judge the
 short on a phone. In the FCPXML a two-panel clip is the same frames twice: the bottom panel on V1, the top one on
-V2, each with a trim (`adjust-crop`) and a transform. `jian pull` doesn't read two-panel cuts back yet.
+V2, each with a trim (`adjust-crop`), a "fill" conform and a transform, in the units Resolve reads them in
+(`resolve._units`: not the textbook ones when the source isn't shaped like the timeline). `jian pull` doesn't read
+two-panel cuts back yet.
 
 ## 8. Configuration layers
 

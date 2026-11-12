@@ -133,7 +133,7 @@ def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
             ass = write_ass([], one, out / f"{t['id']}.ass", H, p.cfg["captions"], p.cfg.get("texts"), labels=False,
                             glossary=p.cfg.get("glossary", []), place={"texts": {t["id"]: pl}} if pl else {})
             ass.write_text(re.sub(r"(,(?:Hi|Chat|Chapter),,0,0,0,,\{[^}]*)\}", r"\1\\1a&HFF&}", ass.read_text()))
-            png = out / f"{t['id']}.box.png"
+            png = out / f"{t['id']}-box.png"  # one dot only: Resolve looks for "x.png" when the file is "x.box.png"
             run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c=black@0.0:s={W}x{H}:r={F}:d={z + 1:.3f},format=rgba",
                  "-vf", f"subtitles=filename={ass.name}:alpha=1", "-ss", f"{(a + z) / 2:.3f}", "-frames:v", 1, png.name],
                 cwd=out)
@@ -153,10 +153,25 @@ def _base_fit(W: int, H: int, sw: int, sh: int) -> float:
     return max(W / sw, H / sh)
 
 
+def _units(W: int, H: int, sw: int, sh: int) -> tuple[float, float, float, float]:
+    """How Resolve reads an FCPXML position and trim (measured on Resolve 21 with a 16:9 source in a 9:16 timeline;
+    other mixes follow the same rule, unmeasured): as fractions of the timeline frame (x: percent of its height,
+    times H/W), applied to the conformed image instead of to the frame. Returns screen pixels per unit of position
+    (x, y) and source pixels per unit of trim (sides, top and bottom). A source shaped like the timeline: the
+    textbook percent of the frame height."""
+    base = _base_fit(W, H, sw, sh)
+    return H / W * sw * base / 100, sh * base / 100, H / W * sw / 100, sh / 100
+
+
+def _conform(W: int, H: int, sw: int, sh: int) -> str:
+    """A source shaped unlike the timeline says how it fills the frame (as `_base_fit`): left unsaid, Resolve fits
+    it whole and every scale here comes out small."""
+    return '<adjust-conform type="fill"/>' if sw * H != sh * W else ""
+
+
 def _panel(region: list[float], box: tuple[int, int, int, int], W: int, H: int, sw: int, sh: int) -> str:
     """One panel of a stacked clip, as FCPXML: the source trimmed to what the panel shows (the region, cover-fitted
-    to the box: percent of each side's own dimension), scaled, and moved so the region's centre sits on the box's.
-    The one place that decides how a two-panel short reads in Resolve."""
+    to the box), scaled, and moved so the region's centre sits on the box's, in Resolve's units (`_units`)."""
     x0, y0, x1, y1 = region
     bx0, by0, bx1, by1 = box
     bw, bh = bx1 - bx0, by1 - by0
@@ -165,29 +180,32 @@ def _panel(region: list[float], box: tuple[int, int, int, int], W: int, H: int, 
     k = base * z  # screen pixels per source pixel
     cx, cy = (x0 + x1) / 2 * sw, (y0 + y1) / 2 * sh
     vw, vh = bw / k, bh / k  # the part of the source the box shows
-    trim = [max(0.0, cx - vw / 2) / sw, max(0.0, cy - vh / 2) / sh, max(0.0, sw - cx - vw / 2) / sw,
-            max(0.0, sh - cy - vh / 2) / sh]
+    ux, uy, cl, ct = _units(W, H, sw, sh)
+    trim = [max(0.0, cx - vw / 2) / cl, max(0.0, cy - vh / 2) / ct, max(0.0, sw - cx - vw / 2) / cl,
+            max(0.0, sh - cy - vh / 2) / ct]
     px = (bx0 + bx1) / 2 - W / 2 - (cx - sw / 2) * k
     py = (by0 + by1) / 2 - H / 2 - (cy - sh / 2) * k
     return ('<adjust-crop mode="trim"><trim-rect left="{:.4f}" top="{:.4f}" right="{:.4f}" bottom="{:.4f}"/></adjust-crop>'
-            .format(*(100 * t for t in trim))
-            + f'<adjust-transform position="{px / H * 100:.4f} {-py / H * 100:.4f}" scale="{z:.5f} {z:.5f}"/>')
+            .format(*trim) + _conform(W, H, sw, sh)
+            + f'<adjust-transform position="{px / ux:.4f} {-py / uy:.4f}" scale="{z:.5f} {z:.5f}"/>')
 
 
 def _transform(i: dict, W: int, H: int, sw: int, sh: int) -> str:
     """A crop ([x0, y0, x1, y1] of the source) as an FCPXML zoom: scale about the centre, then move the cropped
-    region's centre to the frame's centre. A stacked clip: its bottom panel (the top one is a clip of its own, above
-    it). "" when there's nothing to say."""
+    region's centre to the frame's centre, in Resolve's units (`_units`). A stacked clip: its bottom panel (the top
+    one is a clip of its own, above it). "" when there's nothing to say."""
     if i.get("stack"):
         from .render import panels
         return _panel(*panels(i["stack"], W, H)[1], W, H, sw, sh)
+    fill = _conform(W, H, sw, sh)
     if not i.get("crop"):
-        return ""
+        return fill
     x0, y0, x1, y1 = i["crop"]
     cover = _base_fit(W, H, sw, sh)
     z = max(1 / (x1 - x0), 1 / (y1 - y0))
     dx, dy = ((x0 + x1) / 2 - 0.5) * sw * cover * z, ((y0 + y1) / 2 - 0.5) * sh * cover * z
-    return f'<adjust-transform position="{-dx / H * 100:.4g} {dy / H * 100:.4g}" scale="{z:.4g} {z:.4g}"/>'
+    ux, uy, _, _ = _units(W, H, sw, sh)
+    return fill + f'<adjust-transform position="{-dx / ux:.4g} {dy / uy:.4g}" scale="{z:.4g} {z:.4g}"/>'
 
 
 def plan(p: Project, v: int) -> dict:
@@ -362,7 +380,7 @@ GUIDE = """# {name} in DaVinci Resolve
 2. File > Import > Timeline… and pick
    `{fcpxml}`
    In the dialog: "Automatically set project settings" **on** ({w}x{h}, {fps} fps), "Automatically import source
-   clips into media pool" **on**, "Use sizing information" **on** (text positions). Nothing else.
+   clips into media pool" **on**, "Use sizing information" **on** (text positions, zooms, the two panels of a short). Nothing else.
 3. File > Import > Subtitle… and pick `{srt}`; drag it from the Media Pool onto the timeline at its first frame.
    The captions land on a subtitle track, editable.
 
@@ -540,7 +558,7 @@ def _zoom(m: dict, man: dict) -> str | None:
     W, H = man["size"]
     src = man["sources"].get(m.get("src"), {})
     t = _transform(m, W, H, src.get("w") or W, src.get("h") or H)
-    return "|".join(re.findall(r'"([^"]*)"', t)) if t else None
+    return "|".join(re.findall(r'(?:position|scale)="([^"]*)"', t)) or None
 
 
 def changes(man: dict, got: dict) -> tuple[list[dict], dict[int, dict]]:
