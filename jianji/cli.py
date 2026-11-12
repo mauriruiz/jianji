@@ -19,13 +19,17 @@
   jian status <video>               what exists, what's next
   jian log <video> <key> <value>    record review_minutes, feedback etc. in metrics.json
   jian report [root]                scoreboard: review minutes, versions, QA, machine time, per video
+  jian queue [--json] [--all]       shorts waiting for your yes or no (--announce: tell your on_queue_ready hook)
+  jian approve <id> [--force]       a short into your upload folder as a Resolve project (never a final render)
+  jian reject <id>                  a short out of the queue (nothing is deleted)
   jian hook <event> [KEY=VALUE]...  run your hook for an event by hand (to try it, or from your own scripts)
 
 Shorts out of a long video: compile, cut, qa, cuts, texts, resolve, at and status take `--short <n>` and work in
 <video>/jianji/shorts/<n>/ (its own edits and renders, the video's transcripts and cache; profile `short`).
   jian doctor                       check the install and your layer (~/.config/jianji) against this version
 
-Hooks: `[hooks] on_ingest | on_error = "command"` in your layer's config.toml; the facts arrive as JIAN_* variables.
+Hooks: `[hooks] on_ingest | on_queue_ready | on_approve | on_reject | on_error = "command"` in your layer's
+config.toml; the facts arrive as JIAN_* variables.
 """
 from __future__ import annotations
 
@@ -622,6 +626,16 @@ def main(argv=None):
     lg.add_argument("video")
     lg.add_argument("key")
     lg.add_argument("value")
+    qu = sub.add_parser("queue")
+    qu.add_argument("--json", action="store_true")
+    qu.add_argument("--all", action="store_true", help="also approved, rejected, failed QA and unrendered")
+    qu.add_argument("--announce", action="store_true", help="fire on_queue_ready when something is waiting")
+    qu.add_argument("--protected", action="store_true", help="list the recordings a waiting short still needs")
+    for name in ("approve", "reject"):
+        j = sub.add_parser(name)
+        j.add_argument("id", help="<video>:<n>, as `jian queue` prints it")
+        if name == "approve":
+            j.add_argument("--force", action="store_true", help="even if its QA failed or didn't run")
     hk = sub.add_parser("hook")
     hk.add_argument("event")
     hk.add_argument("facts", nargs="*", metavar="KEY=VALUE")
@@ -633,7 +647,7 @@ def main(argv=None):
         if code not in (None, 0) and args.cmd not in ("doctor", "hook") and not isinstance(e, KeyboardInterrupt):
             from .core import hook
             try:
-                hook("error", command=args.cmd, video=getattr(args, "video", None), error=code)
+                hook("error", command=args.cmd, video=getattr(args, "video", getattr(args, "id", None)), error=code)
             except Exception:  # a broken config.toml: the original failure is the one to show
                 pass
         raise
@@ -645,6 +659,12 @@ def _run(args):
         if any("=" not in x for x in args.facts):
             die("facts are KEY=VALUE")
         return hook(args.event, **{k.lower(): v for k, v in (x.split("=", 1) for x in args.facts)})
+    if args.cmd in ("queue", "approve", "reject"):
+        from . import queue as q
+        if args.cmd == "queue":
+            return print("\n".join(q.protected())) if args.protected else q.queue(args.json, args.all, args.announce)
+        q.approve(args.id, args.force) if args.cmd == "approve" else q.reject(args.id)
+        return
     if args.cmd == "new":
         return new(args.video, args.profile)
     if args.cmd == "ingest":

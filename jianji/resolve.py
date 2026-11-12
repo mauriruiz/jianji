@@ -208,7 +208,7 @@ def _transform(i: dict, W: int, H: int, sw: int, sh: int) -> str:
     return fill + f'<adjust-transform position="{-dx / ux:.4g} {dy / uy:.4g}" scale="{z:.4g} {z:.4g}"/>'
 
 
-def plan(p: Project, v: int) -> dict:
+def plan(p: Project, v: int, texts_dir: Path | None = None) -> dict:
     """The cut as tracks of clips in timeline frames, for the writer and the manifest."""
     from .media import src_path
     d = p.out / "renders"
@@ -242,7 +242,7 @@ def plan(p: Project, v: int) -> dict:
             items.append({"id": f"oa_{o['id']}", "track": "A2", "src": o["src"], "start": o["rec"],
                           "end": o["rec"] + o["n"], "in": fr(o["in"]), "overlay": o["id"],
                           "gain_db": round(o["gain_db"] + gain, 2), "link": f"o_{o['id']}"})
-    for t in _texts(p, tl, place, p.out / "resolve" / f"texts.v{v:03d}"):
+    for t in _texts(p, tl, place, texts_dir or p.out / "resolve" / f"texts.v{v:03d}"):
         a, n = round(t["a"] * F), round((t["z"] - t["a"]) * F)
         if t.get("png"):
             items.append({"id": f"b_{t['text']}", "track": "V3", "png": t.pop("png"), "start": a, "end": a + n, "in": 0,
@@ -396,11 +396,17 @@ A-roll's sound, A2 B-roll sound, A3 room tone. Markers: blue sections, yellow ch
 """
 
 
-def export(p: Project, v: int | None = None) -> Path:
+def export(p: Project, v: int | None = None, out: Path | None = None) -> Path:
+    """out: a folder of your own instead of jianji/resolve/ (`jian approve`): the timeline, its text boxes and the
+    captions together there, so it opens without the work folder; the footage stays where it is, linked by path."""
     v = v or version_of(p.latest_edit())
-    out = p.path("resolve", "x").parent
-    (out / "from-resolve").mkdir(exist_ok=True)
-    pl = plan(p, v)
+    texts = out / "texts" if out else None
+    out = out or p.path("resolve", "x").parent
+    (out / "from-resolve").mkdir(parents=True, exist_ok=True)
+    pl = plan(p, v, texts)
+    if texts and pl["srt"]:
+        import shutil
+        pl["srt"] = str(shutil.copy2(pl["srt"], out / f"{pl['name']}.srt"))
     f = write_fcpxml(pl, out / f"{pl['name']}.fcpxml")
     manifest = {k: pl[k] for k in ("name", "video", "v", "size", "frames", "srt", "loud_gain")}
     manifest.update(fps=str(pl["fps"]), items=pl["items"], markers=pl["markers"],
@@ -413,7 +419,7 @@ def export(p: Project, v: int | None = None) -> Path:
              "Cropping) and placed (Transform). Check it against the preview before you render; `jian pull` doesn't "
              "read these back.\n") if any(i.get("stack") for i in pl["items"]) else ""
     (out / "IMPORT.md").write_text(GUIDE.format(name=pl["name"], video=p.dir.name, stack=stack, fcpxml=f, w=W, h=H, fps=pl["fps"],
-                                                srt=pl["srt"], footage=p.footage, texts=out / f"texts.v{v:03d}",
+                                                srt=pl["srt"], footage=p.footage, texts=texts or out / f"texts.v{v:03d}",
                                                 work=WORKDIR.expanduser(), back=out / "from-resolve"))
     print(f"resolve {f}\n        guide: {out / 'IMPORT.md'}")
     return f
