@@ -127,3 +127,18 @@ def test_words_whisper_didnt_write_after_the_last_one(sources):
     assert not fragments(old, sources, cut, [])  # loud but no word there (a lid, a laugh): not a fail
     # no pause after it: a run-on, so QA wants it finished or marked abrupt, with the reason in review.md
     assert [m["word"] for m in mid_sentence(tl, sources, cut)] == ["ruido..."]
+
+
+def test_a_pause_under_room_noise_ends_a_sentence():
+    """A stream behind a noise gate: the room (music, keys) sits 25 dB under the voice and 35 dB over the floor the
+    gate leaves. A sentence followed by 0.6 s of that room has ended; one the speaker runs on from hasn't."""
+    from jianji.compile import is_boundary
+    words = [("It", 2.0, 2.2), ("works.", 2.2, 2.6), ("And", 3.2, 3.4), ("then.", 3.4, 3.8), ("Next", 3.85, 4.1), ("one.", 4.1, 4.5)]
+    env = np.full(801, -45.0)  # the room, with the gate open
+    env[:150] = env[650:] = -80.0  # the gate closed: that's where the floor is measured
+    W = []
+    for i, (t, a, b) in enumerate(words):
+        env[round(a * 100):round(b * 100)] = -20.0
+        W.append({"i": i, "t": t, "s": a, "e": b})
+    src = {"words": W, "env": env}
+    assert is_boundary(src, 1, CUT) and not is_boundary(src, 3, CUT)  # "works." | pause; "then." runs into "Next"

@@ -265,8 +265,10 @@ def is_boundary(src: dict, k: int, cut: dict) -> bool:
         return True  # 1.5 s with no word: a pause, even under keyboard and music (streams on one audio track)
     db = cut.get("tail_db", 6)
     dec = word_end(src, W[k]["e"], W[k + 1]["s"], db)
-    # a pause: under the floor + 2x tail_db (a decaying word or room noise is still a pause, a voice isn't)
-    return next_sound(src, dec, W[k + 1]["s"], 2 * db) - dec >= float(cut.get("boundary_gap", 0.12))
+    # a pause: no voice (a decaying word or room noise is still a pause). Under the floor + 2x tail_db, or within 10 dB
+    # of the speaker's level where the room sits higher than that: music and keys on a stream, a mic behind a noise gate
+    quiet = max(2 * db, voice_db(src) - 10 - floor_db(src))
+    return next_sound(src, dec, W[k + 1]["s"], quiet) - dec >= float(cut.get("boundary_gap", 0.12))
 
 
 def carries_on(W: list[dict], last: int, first: int) -> bool:
