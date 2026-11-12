@@ -20,3 +20,20 @@ Small habits on stream that make the recap much better. jian hears them (`jian m
 - Optional: record the screen and the webcam as separate sources (Source Record plugin), for cleaner zooms on code.
 - Keep secrets off screen: close `.env` files, use a separate browser profile, turn on Do Not Disturb (notifications).
   QA still checks, but it can only blur what was recorded.
+
+## After the stream
+
+`jian ingest` turns the recording into a video folder without touching it: `<videos_root>/<date>-<name>/` with your
+stream brief (`briefs/stream.md` in your layer) and, in `footage/`, a link to the file. Give it the file, or tell it
+where OBS records and it takes the newest one:
+
+```toml
+# ~/.config/jianji/config.toml
+[ingest]
+watch = "~/Movies"          # OBS: Settings > Output > Recording > Recording Path
+name = "{date}-{slug}"      # the folder's name; {slug} is the rest of the file's name
+profile = "stream"
+```
+
+Then `jian prep`, `jian map` and `/jian-edit` as usual. The recording stays where OBS wrote it, under its own name:
+keep it there while you work on the folder. Running `jian ingest` again on the same file finds the same folder.

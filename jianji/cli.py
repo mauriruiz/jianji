@@ -1,6 +1,7 @@
 """jian: the deterministic half of the pipeline. Never calls an LLM.
 
   jian new <name> [--profile P]     create <videos_root>/<name>/footage/ and a brief.md template
+  jian ingest [file] [--name N]     a finished recording -> a dated video folder linked to it (the file is never touched)
   jian prep <video>                 probe, transcribe, pack (cached; resumes where it stopped)
   jian map <video>                  a long stream, minute by minute (speech, screen, files, cues, privacy): stream.md
   jian words <video> <src> <a> <b>  word-level ids for a range
@@ -354,6 +355,40 @@ def new(arg: str, profile: str):
     print(f"{d}\n  footage: {d if at_root else d / 'footage'}\n  brief:   {brief}")
 
 
+def ingest(file_arg: str | None, profile: str | None = None, name: str | None = None) -> Path:
+    """A finished recording becomes a video folder: <videos_root>/<date>-<slug>/ with your brief template and, in
+    footage/, a link to the recording. The recording is never moved, renamed or written to. With no file, the newest
+    recording in `[ingest] watch` (config.toml in your layer). Again on the same recording: the same folder."""
+    from datetime import datetime
+    from .core import global_config
+    from .media import MEDIA_EXT
+    cfg = global_config().get("ingest", {})
+    if file_arg:
+        src = Path(file_arg).expanduser()
+    else:
+        watch = Path(cfg.get("watch") or die("no recording given and no [ingest] watch folder in your config.toml")).expanduser()
+        found = [f for f in watch.glob("*") if f.is_file() and f.suffix.lower() in MEDIA_EXT and not f.name.startswith(".")]
+        src = max(found, key=lambda f: f.stat().st_mtime, default=None) or die(f"no recordings in {watch}")
+    src = src.resolve()
+    if not src.is_file() or src.suffix.lower() not in MEDIA_EXT:
+        die(f"not a recording: {src}")
+    m = re.match(r"(\d{4}-\d{2}-\d{2})(.*)", src.stem)  # OBS names a file by when it started; else, when it was written
+    date = m.group(1) if m else datetime.fromtimestamp(src.stat().st_mtime).strftime("%Y-%m-%d")
+    slug = re.sub(r"[^a-z0-9]+", "-", (m.group(2) if m else src.stem).lower()).strip("-")
+    name = name or str(cfg.get("name", "{date}-{slug}")).format(date=date, slug=slug).strip("-")
+    root = os.environ.get("JIANJI_VIDEOS_ROOT") or global_config().get("videos_root") or \
+        die("no videos_root set (JIANJI_VIDEOS_ROOT or config.toml in your layer)")
+    d = Path(root).expanduser().resolve() / name
+    link = d / "footage" / src.name
+    if d.exists() and not (link.is_symlink() and link.resolve() == src):
+        die(f"{d} already exists with other footage: pass --name")
+    new(str(d), profile or cfg.get("profile", "stream"))
+    if not link.is_symlink():
+        link.symlink_to(src)
+    print(d)  # last line: the video folder, for scripts
+    return d
+
+
 def _reel(p: Project, video: Path, parts: list[tuple[float, float, str]], out: Path, size: list[int]):
     """Excerpts of `video` ((start, duration, label) each), labelled and joined into one review reel."""
     from .core import FFMPEG, run
@@ -508,6 +543,10 @@ def main(argv=None):
     nw = sub.add_parser("new")
     nw.add_argument("video")
     nw.add_argument("--profile", default="explainer")
+    ig = sub.add_parser("ingest")
+    ig.add_argument("file", nargs="?")
+    ig.add_argument("--profile")
+    ig.add_argument("--name")
     for name in ("prep", "status", "map"):
         sub.add_parser(name).add_argument("video")
     w = sub.add_parser("words")
@@ -556,6 +595,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.cmd == "new":
         return new(args.video, args.profile)
+    if args.cmd == "ingest":
+        ingest(args.file, args.profile, args.name)
+        return
     if args.cmd == "report":
         return report(args.root)
     if args.cmd == "doctor":
