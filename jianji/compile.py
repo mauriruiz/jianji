@@ -544,16 +544,68 @@ def _ends(it: dict, src: dict, cut: dict, first: bool, last: bool) -> tuple[floa
     return head, tail
 
 
+def _stacked(clip: dict, layouts: dict | None) -> dict:
+    """A clip with "layout": "<name>" shows two regions of its source one over the other (a vertical short out of a
+    stream: the camera on top, the screen below). The layout (yours, `[layouts.<name>]`) names the regions as
+    [x0, y0, x1, y1] of the source and where the frame splits; the clip's own "crop" replaces the bottom region (a
+    zoom on the code that matters)."""
+    name = clip.get("layout")
+    if not name:
+        return clip
+    lay = (layouts or {}).get(name)
+    if not isinstance(lay, dict):
+        raise EditError(f"{clip['id']}: layout {name!r} isn't defined ([layouts.{name}] in your config.toml); "
+                        f"defined: {', '.join(layouts or {}) or 'none'}")
+    st = {"top": lay.get("top"), "bottom": clip.get("crop") or lay.get("bottom"), "split": lay.get("split", 0.36)}
+    for k in ("top", "bottom"):
+        r = st[k]
+        if not (isinstance(r, list) and len(r) == 4 and all(isinstance(x, (int, float)) for x in r)
+                and 0 <= r[0] < r[2] <= 1 and 0 <= r[1] < r[3] <= 1):
+            raise EditError(f"{clip['id']}: layout {name!r}: {k} must be [x0, y0, x1, y1] within 0-1, got {r!r}")
+    if not (isinstance(st["split"], (int, float)) and 0.1 <= st["split"] <= 0.9):
+        raise EditError(f"{clip['id']}: layout {name!r}: split is the top panel's share of the height (0.1-0.9)")
+    if clip.get("speed"):
+        raise EditError(f"{clip['id']}: a clip with a layout can't be sped up")
+    return {**{k: v for k, v in clip.items() if k != "crop"}, "stack": st}
+
+
+def add_outro(tl: dict, outro: dict | None, tx: dict | None) -> dict:
+    """Your closing line (`[outro] text`, e.g. when you're live) over the last seconds of the cut: at least `seconds`
+    and its reading time. A text of the same style still up by then ends where the outro starts."""
+    text = str((outro or {}).get("text") or "").strip()
+    if not text or not tl["frames"]:
+        return tl
+    F = Fraction(tl["fps"])
+    style = outro.get("style", "hi")
+    if style not in STYLES:
+        raise EditError(f"[outro] style must be one of {', '.join(STYLES)}, got {style!r}")
+    n = min(tl["frames"], round(max(float(outro.get("seconds", 3)), reading_time(text, tx or {})) * F))
+    rec = tl["frames"] - n
+    texts = []
+    for t in tl["texts"]:
+        if t["style"] == style and t["rec"] + t["n"] > rec:
+            if t["rec"] >= rec - round(F):  # under a second left of it: the outro takes its place
+                tl["warnings"].append(f"{t['id']} dropped: the outro is on screen then")
+                continue
+            t = {**t, "n": rec - t["rec"]}
+            tl["warnings"].append(f"{t['id']} ends early, where the outro starts")
+        texts.append(t)
+    tl["texts"] = texts + [{"id": "outro", "text": text, "style": style, "rec": rec, "n": n}]
+    return tl
+
+
 def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None = None, texts: dict | None = None,
-                     shots: dict | None = None) -> dict:
+                     shots: dict | None = None, layouts: dict | None = None) -> dict:
     """timeline: the profile's [timeline] (size, fps); the edit's own "timeline" wins. texts: the profile's [texts]
-    (reading speed: every text stays up long enough to read). shots: its [shots] (least hold per shot type)."""
+    (reading speed: every text stays up long enough to read). shots: its [shots] (least hold per shot type).
+    layouts: your named two-panel layouts, for clips with "layout"."""
     clips = edit.get("clips", [])
     if not clips:
         raise EditError("edit has no clips")
     ids = [c.get("id") for c in clips]
     if len(set(ids)) != len(ids) or None in ids:
         raise EditError("every clip needs a unique id")
+    clips = [_stacked(c, layouts) for c in clips]
     first_video = next((sources[c["src"]] for c in clips if c["src"] in sources and sources[c["src"]].get("fps")), None)
     tl_cfg = {**(timeline or {}), **edit.get("timeline", {})}
     F = Fraction(tl_cfg.get("fps") or (first_video or {}).get("fps") or "25/1")
@@ -635,7 +687,7 @@ def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None
                 clip = {**clip, **({"tone": spot} if spot is not None else {})}
             segs.append({"clip": clip["id"], "sec": clip.get("sec"), "src": it["src"], "in": round(i, 4),
                          "n": max(1, round((o - i) / speed * F)), "kept": it.get("kept", []), "shot": it["shot"],
-                         **({"speed": speed} if speed != 1 else {}), **{k: clip[k] for k in ("crop", "blur") if clip.get(k)},
+                         **({"speed": speed} if speed != 1 else {}), **{k: clip[k] for k in ("crop", "blur", "stack") if clip.get(k)},
                          **({"exact": True} if clip.get("locked") or clip.get("pinned") else {}),
                          **({"gain_db": clip["gain_db"]} if "gain_db" in clip else {}),
                          **({"tone": clip["tone"]} if "tone" in clip else {}),
@@ -655,7 +707,7 @@ def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None
         # room = silence available past each edge; the renderer shrinks the crossfade to fit it,
         # so a fade handle never leaks the start of a removed word
         room = [round(max(0.0, i - it["lo"]), 3), round(max(0.0, it["hi"] - (i + n / F)), 3)]
-        segs.append({"clip": clip["id"], "sec": clip.get("sec"), "src": it["src"], "in": i, "n": n, "room": room, **{k: clip[k] for k in ("crop", "blur") if clip.get(k)},
+        segs.append({"clip": clip["id"], "sec": clip.get("sec"), "src": it["src"], "in": i, "n": n, "room": room, **{k: clip[k] for k in ("crop", "blur", "stack") if clip.get(k)},
                      "words": [r["first"], r["last"]],
                      "kept": [k for k in range(r["first"], r["last"] + 1) if k not in it["excluded"]],
                      **({"gain_db": clip["gain_db"]} if "gain_db" in clip else {}),
@@ -671,7 +723,8 @@ def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None
                 warnings.append(f"{clip['id']}: no pause to keep and no room tone in {it['src']} to fill one")
                 continue
             segs.append({"clip": clip["id"], "sec": clip.get("sec"), "src": it["src"], "in": round(i + n / F, 3),
-                         "n": max(1, round(need * F)), "kept": [], "tone": spot, "room": [0.05, 0.05]})
+                         "n": max(1, round(need * F)), "kept": [], "tone": spot, "room": [0.05, 0.05],
+                         **({"stack": clip["stack"]} if clip.get("stack") else {})})
             stats["room"] = round(stats.get("room", 0) + need, 3)
             if jout["class"] == "section" and jout["room"] + jout["tail"] + jout["head"] < jout["min"]:
                 warnings.append(f"{clip['id']} -> next section: the speaker runs straight on; "
@@ -693,6 +746,7 @@ def compile_timeline(edit: dict, sources: dict, cut: dict, timeline: dict | None
         p = merged[-1] if merged else None
         if (p and p["src"] == s["src"] and p.get("gain_db") == s.get("gain_db") and "tone" not in p
                 and "tone" not in s and p["clip"] not in exact and s["clip"] not in exact
+                and p.get("stack") == s.get("stack")
                 and p["in"] <= s["in"] <= p["in"] + (p["n"] + 1) / F):
             end = max(p["in"] + p["n"] / F, s["in"] + s["n"] / F)
             p["n"] = round((end - p["in"]) * F)
