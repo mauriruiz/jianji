@@ -79,10 +79,32 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
 1. `jian compile <name> --short <n>`: fix every rejection and read every warning ("lands mid-sentence" is a QA fail
    waiting to happen).
 2. `jian cut <name> --short <n>`: renders it, runs QA, writes the Resolve timeline and `shorts/<n>/preview.mp4`.
-3. QA `fail`: fix it in `edit.v002.json` and cut again, once. Still failing: leave it and report it; a `privacy` fail
-   you can't blur away means the short is dropped (delete nothing: say it).
+3. QA `fail`: repair it in the next edit version (`edit.v002.json`, then `v003`) and cut again, twice at most. The
+   failing check says what to change:
+   - `speech_cuts`, "mid-sentence": end the clip on the clause or sentence end (`jian words` shows where it is), or
+     start the next clip where the sentence goes on;
+   - `speech_cuts`, "without breathing room": the speaker runs on across that cut. Make the two clips one (no cut),
+     move the cut to the nearest real pause, or leave the clip out if the short stands without it. `"abrupt"` is
+     only for a topic that really jumps, never a way round the check;
+   - `clipped_words`, `fragments`, `edges`: a cut lands inside speech: move that edge of the clip one word in or out;
+   - `short_segments`: join the piece to its neighbour, or leave it out;
+   - `captions`, `text_readable`, `safe_zone`, `text_faces`: shorten the text, or `fix` the caption word;
+   - `privacy`: cover it with `blur`. One you can't cover means the short is dropped;
+   - any other check: its message names the clip and what it wants.
+4. A short that still fails stays as it is (delete nothing) and another takes its place: cut the next moment on your
+   list (section 2) under the next free number, until the number asked for is waiting or the list runs out. The user
+   is better served by the third-best moment than by a queue that comes out short. `jian status <name>` shows where
+   every short stands: `pending` is waiting for the user, `failed` didn't get through QA, `approved` and `rejected`
+   are theirs already (never touch those).
+
+Asked to repair or to fill a queue that came out short (a second pass): start from `jian status <name>` and from
+`shorts.md`, not from zero.
 
 ## 5. Report
 
-One line per short: number, title, seconds, QA status, and anything the user should look at before using it. Then
-what you skipped and why.
+Keep `shorts.md` in the work folder current (add to it if it's there): one line per moment you considered, in
+your order: where it is in the stream, how it opens, and what became of it (short 2; failed QA and why; skipped and
+why). A later pass, and the user, start from it.
+
+Then one line per short: number, title, seconds, QA status, and anything the user should look at before using it,
+and what you skipped and why.

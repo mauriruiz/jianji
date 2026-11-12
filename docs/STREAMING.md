@@ -72,3 +72,9 @@ prep and map, has Claude Code cut the shorts with its permissions cut down to ji
 Security), and ends with `jian queue --announce`, so your `on_queue_ready` hook can tell you in the morning. The log
 is `jianji/night.log`. The recording stays where OBS wrote it, under its own name:
 keep it there while you work on the folder. Running `jian ingest` again on the same file finds the same folder.
+
+The night aims at a full queue (`night.sh <folder> 3`: three shorts, the default). A short that fails QA is repaired
+or another moment is cut in its place, and if fewer than asked for got through, the editor gets one more pass for
+just that. `jian status <folder>` shows where each short stands (`1 pending, 2 failed, 3 approved`). Run again on
+the same folder, the night cuts only what is missing: `NIGHT_RECAP=1 scripts/night.sh <folder>` the day after
+adds the recap and leaves the shorts alone.

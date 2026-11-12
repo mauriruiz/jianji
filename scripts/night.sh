@@ -3,6 +3,10 @@
 #
 #   scripts/night.sh <video> [how many shorts, default 3]
 #
+# The queue should come out full: when fewer shorts than asked for got through QA, the editor gets one more pass to
+# repair the failed ones or cut other moments in their place. Run again on the same video, it cuts only what is
+# missing (shorts you already approved or rejected count), so a second run with NIGHT_RECAP=1 adds just the recap.
+#
 # The recording is untrusted input (a public chat, whatever was on screen), so the editor runs locked down:
 #   - tools: Bash, Read, Write, Edit, Glob, Grep. No web tools, no agents, no MCP servers, no user or project settings;
 #   - Bash: only the jian commands an edit needs. Not ingest, approve, reject, queue, hook, clean, new or pull;
@@ -14,7 +18,8 @@
 # It's a script, not a `jian` command: jian itself never calls a model.
 #
 # Environment: JIAN, CLAUDE (the commands), NIGHT_RECAP=1 (also the recap, /jian-edit, after the shorts),
-# NIGHT_CLAUDE_ARGS (extra arguments for claude, e.g. "--model sonnet"), NIGHT_*_TIMEOUT (seconds per step).
+# NIGHT_CLAUDE_ARGS (extra arguments for claude, e.g. "--model sonnet"), NIGHT_*_TIMEOUT (seconds per step),
+# NIGHT_SHORTS_PASSES (editor passes over the shorts, at most: 2).
 set -u
 PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 JIAN=${JIAN:-jian}
@@ -71,11 +76,24 @@ $2 Call jian exactly as: $JIAN" \
 say "night: $video ($dir), up to $count shorts"
 step prep "${NIGHT_PREP_TIMEOUT:-14400}" "$JIAN" prep "$video" || exit 1
 step map "${NIGHT_MAP_TIMEOUT:-7200}" "$JIAN" map "$video" || exit 1
+made() {  # this video's shorts that got through QA: waiting for you, or already judged by you
+  "$JIAN" status "$video" 2>/dev/null | sed -n 's/^shorts: \(.*\)  (jian status .*/\1/p' | tr ',' '\n' \
+    | grep -c -E ' (pending|approved|rejected)$'
+}
 failed=0
 # shorts first: if the recap fails or runs out of time, the queue is already there
-step shorts "${NIGHT_SHORTS_TIMEOUT:-3600}" editor jian-shorts \
-  "Do it now for the video folder $dir (work folder: $work). At most $count shorts. Nobody is watching: don't ask, finish and report." \
-  || { failed=1; "$JIAN" hook error COMMAND=night VIDEO="$(basename "$dir")" ERROR="the shorts step failed: see night.log"; }
+pass=1
+while have=$(made); have=${have:-0}; [ "$have" -lt "$count" ]; do
+  if [ "$pass" -gt "${NIGHT_SHORTS_PASSES:-2}" ]; then say "shorts: $have of $count got through QA"; break; fi
+  if [ "$have" -eq 0 ] && [ "$pass" -eq 1 ]; then ask="At most $count shorts."
+  else ask="$have of the $count shorts wanted are already there (\`$JIAN status\` shows where each one stands): repair the ones that failed QA or cut other moments in their place, $((count - have)) more at most, and leave the rest alone."
+  fi
+  step shorts "${NIGHT_SHORTS_TIMEOUT:-3600}" editor jian-shorts \
+    "Do it now for the video folder $dir (work folder: $work). $ask Nobody is watching: don't ask, finish and report." \
+    || { failed=1; "$JIAN" hook error COMMAND=night VIDEO="$(basename "$dir")" ERROR="the shorts step failed: see night.log"; break; }
+  pass=$((pass + 1))
+done
+[ "$pass" -eq 1 ] && [ "$have" -ge "$count" ] && say "shorts: $have already cut, $count wanted: nothing to do"
 if [ "${NIGHT_RECAP:-0}" = 1 ]; then
   step recap "${NIGHT_RECAP_TIMEOUT:-7200}" editor jian-edit \
     "Do it now for the video folder $dir (work folder: $work). Nobody is watching: don't ask, finish and report." \

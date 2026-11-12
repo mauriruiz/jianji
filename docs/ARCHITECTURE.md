@@ -123,7 +123,7 @@ second line is kept current.
 | `duration`, `size`, `av_offset`, `av_sync`, `loudness`, `picture` | the render doesn't match the plan; A/V drift; loudness off target; black or frozen frames |
 | `clipped_words` | a word next to a cut scores clearly lower on the render than in the source (wav2vec2, aligned in context) and the cut-away side holds voice |
 | `fragments` | voice-level sound past the kept words at a cut *and* Whisper hears a word there that the edit doesn't have |
-| `speech_cuts` | a speech cut lands mid-sentence (not marked `abrupt`) or keeps less air than its class's minimum |
+| `speech_cuts` | a speech cut lands mid-sentence (not marked `abrupt`) or keeps less air than its class's minimum (air: the voice gone, 10 dB under the speaker's level; a stream's room, with music and keys, never reaches the noise floor) |
 | `short_segments` | anything on screen under 1 s |
 | `text_faces`, `safe_zone` | burned text over a face more than 10% of its time; outside the platform safe zone (vertical) |
 | `text_readable`, `shot_readable` | a text up less than its reading time; a shot under its hold (warn) |

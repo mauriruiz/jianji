@@ -60,3 +60,26 @@ def test_without_room_tone_qa_calls_it_too_tight(tmp_path):
     assert not any("tone" in s for s in tl["segments"])
     (j,) = breathing(tl, sources, heard, p.cfg["cut"])
     assert j["tight"] and j["quiet"] < 0.1, j
+
+
+def test_a_pause_in_a_noisy_room_is_still_a_pause():
+    """A stream: music and keys 25 dB under the voice, and a noise gate that closes now and then, so the noise floor
+    sits far under the room. Against the floor that room is never quiet and every cut looked tight; against the
+    voice, 0.4 s between two sentences is a pause, and words that run together still aren't."""
+    import tomllib
+    cut = tomllib.loads((Path(__file__).parent.parent / "jianji" / "profiles" / "short.toml").read_text())["cut"]
+    rng = np.random.default_rng(0)
+    level = lambda db, secs: rng.normal(0, 10 ** (db / 20), round(secs * 16000)).astype(np.float32)
+    words = [{"i": i, "t": t, "s": s, "e": s + 0.5} for i, (t, s) in enumerate((("one", 1.0), ("two.", 1.5), ("three", 5.0), ("four.", 5.5)))]
+
+    def join(pause):  # gate closed | "one two." | the room | "three four." | gate closed
+        heard = np.concatenate([level(-80, 1), level(-20, 1), level(-45, pause), level(-20, 1), level(-80, 1)])
+        n = round((2 + pause / 2) * 25)
+        tl = {"fps": "25/1", "segments": [
+            {"id": 1, "clip": "a", "sec": None, "src": "A", "in": 0.0, "n": n, "rec": 0, "kept": [0, 1]},
+            {"id": 2, "clip": "b", "sec": None, "src": "A", "in": 5.0 - pause / 2, "n": n, "rec": n, "kept": [2, 3]}]}
+        (j,) = breathing(tl, {"A": {"words": words}}, heard, cut)
+        return j
+
+    assert not join(0.4)["tight"] and 0.35 <= join(0.4)["quiet"] <= 0.45, join(0.4)
+    assert join(0.08)["tight"], join(0.08)
