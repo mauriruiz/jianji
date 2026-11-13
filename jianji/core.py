@@ -288,7 +288,8 @@ class Project:
         self.short = None
         if short is not None:
             cfg = self._short(str(short), cfg)
-        for k in ("layouts", "outro"):  # tables of your config.toml, for every video; a video's own config.toml wins
+        # tables of your config.toml, for every video; a video's own config.toml wins
+        for k in ("layouts", "outro", "shorts"):
             if k in global_config() or k in cfg:
                 cfg[k] = merge(global_config().get(k, {}), cfg.get(k, {}))
         self.cfg = cfg

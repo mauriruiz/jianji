@@ -28,7 +28,8 @@ or `vedit/` in older folders) and the shorts that already exist.
 ## 2. Choose
 
 At most the number asked for (3 if none); fewer when the material has fewer. A candidate is one idea that stands
-alone for someone who never saw the stream, 20-60 s:
+alone for someone who never saw the stream, as long as the user wants their shorts (`jian status` prints
+`short length:` when they have said; 20-60 s when they haven't):
 
 - a result ("mark that" / "marca eso" and "it works" cues in `stream.md` point at them), a bug found and fixed, a
   decision explained, a chat question answered well;
@@ -46,6 +47,13 @@ result ("this is designed wrong", "you can't copy a Vec"). It has to:
 
 Find it before anything else, with `jian words` on the moment. A moment with no such sentence isn't a candidate,
 however good the topic. Rank the candidates by their hook, strongest first, and take them in that order.
+
+**Build it to length.** A short is one idea told whole: the hook, the setup a stranger needs, the point, and a line
+that closes it. When a moment comes out under the length the user aims for, look in the stream around it for what
+builds the idea (how the problem came up, the example, what it changes), even minutes away, and tell it after the
+hook. Never pad: no pauses left in to add seconds, nothing said twice, no second idea, and never anything in front of
+the hook. A moment that can't reach that length goes down your list: cut it only when the idea is whole and it is
+among the best you have, and never under the user's lower limit or over the upper one.
 
 No candidate worth a short: make none and say so. A weak short costs the user more than no short.
 
@@ -96,7 +104,9 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
 
 1. `jian compile <name> --short <n>`: fix every rejection and read every warning ("lands mid-sentence" is a QA fail
    waiting to happen). An `opening:` warning means the first seconds are weak (a run-up word, a halting line, a
-   first sentence that lands late, or not the hook you named): open on another line, don't argue with it.
+   first sentence that lands late, or not the hook you named): open on another line, don't argue with it. A
+   `length:` warning means the cut is shorter or longer than the user wants: build the idea out or tighten it now;
+   "(QA fails it)" is one of their limits.
 2. `jian cut <name> --short <n>`: renders it, runs QA, writes the Resolve timeline and `shorts/<n>/preview.mp4`.
 3. QA `fail`: repair it in the next edit version (`edit.v002.json`, then `v003`) and cut again, twice at most. The
    failing check says what to change:

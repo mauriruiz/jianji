@@ -119,11 +119,11 @@ def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, rend
            zone: dict | None = None, reuse: dict | None = None, cut: dict | None = None,
            vision: list[dict] | None = None, texts: dict | None = None, shots: dict | None = None,
            ocr: list[dict] | None = None, never: list[str] | None = None, allow: list[str] | None = None,
-           hook: dict | None = None) -> dict:
+           hook: dict | None = None, length: dict | None = None) -> dict:
     """reuse: a previous QA result for a master with the same sound; its HEAVY checks are carried over.
     cut: the profile's [cut], for the breathing check. vision: faces/subject from vision.detect on the master.
     texts: the profile's [texts], for reading time. shots: its [shots], for least holds. hook: its [hook], for how
-    the cut opens."""
+    the cut opens. length: your [shorts] (a short cut out of a long video), for how long it may run."""
     F = Fraction(tl["fps"])
     frame = float(1 / F)
     segs = tl["segments"]
@@ -242,6 +242,15 @@ def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, rend
               f"{sum(not j['why'] for j in tight)} without breathing room, "
               f"{len({x['why'] for x in tight + mids if x['why']})} kept tight on purpose (abrupt); median quiet "
               + ", ".join(f"{c} {v:.2f}s" for c, v in med.items()))
+    if length:  # a short out of a long video: as long as you want them, never past your limits
+        cur[0] = "length"
+        from .compile import judge_length
+        secs = float(tl["frames"] / F)
+        off = judge_length(secs, length)
+        if off:
+            issue(0.0, off[0], off[1])
+        check("length", off[0] if off else "pass", f"{secs:.1f} s" + (f" (you aim for {length['length'][0]:g}-{length['length'][1]:g} s)"
+                                                                   if length.get("length") else ""))
     if hook:  # the first seconds: on the line itself, said in one go
         cur[0] = "hook"
         from .compile import opening

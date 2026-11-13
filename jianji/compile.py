@@ -323,6 +323,28 @@ def opening(tl: dict, sources: dict, hook: dict) -> tuple[list[tuple[str, float,
                  + (f"{land:.1f}s" if land else "no point") + f", slowest word to word in it {gap:.2f}s")
 
 
+def judge_length(seconds: float, rule: dict) -> tuple[str, str] | None:
+    """A short's length against your `[shorts]` (config.toml in your layer): ("fail" | "warn", what to do), or None
+    when it fits. `length = [lo, hi]` is what you aim for (outside it: a warning, the short can still be the right
+    one); `min_length` and `max_length` are the limits you never cross (QA fails it)."""
+    aim = rule.get("length") or [0, 0]
+    if not (isinstance(aim, list) and len(aim) == 2 and all(isinstance(x, (int, float)) for x in aim) and aim[0] <= aim[1]):
+        raise EditError(f"[shorts] length is [shortest, longest] in seconds, got {aim!r}")
+    lo, hi = aim
+    mn, mx = float(rule.get("min_length") or 0), float(rule.get("max_length") or 0)
+    said = f"{seconds:.1f} s"
+    grow = "build the idea out after the hook (the setup it needs, the point, a line that closes it), or take another moment"
+    if mn and seconds < mn:
+        return "fail", f"{said}, under the {mn:g} s you never go below: {grow}"
+    if mx and seconds > mx:
+        return "fail", f"{said}, over the {mx:g} s you never go above: cut what the idea doesn't need"
+    if lo and seconds < lo:
+        return "warn", f"{said}, under the {lo:g}-{hi:g} s you aim for: keep it only if the idea is whole and among the best; else {grow}"
+    if hi and seconds > hi:
+        return "warn", f"{said}, over the {lo:g}-{hi:g} s you aim for: cut what the idea doesn't need"
+    return None
+
+
 def _trailing(W: list[dict], k: int, a: int, b: int) -> bool:
     """A filler that closes its sentence ("pica mucho, eh."): said right after the word before it and ending the
     sentence or the clip. It stays: without it the sentence sounds chopped."""
