@@ -11,7 +11,8 @@
 #   - tools: Bash, Read, Write, Edit, Glob, Grep. No web tools, no agents, no MCP servers, no user or project settings;
 #   - Bash: only the jian commands an edit needs. Not ingest, approve, reject, queue, hook, clean, new or pull;
 #   - files: read inside the video folder, write inside its work folder (<video>/jianji/), nowhere else
-#     (an Edit(//path/**) rule covers every file-writing tool);
+#     (an Edit(//path/**) rule covers every file-writing tool). The recap's style guide lives outside both (your
+#     layer, or jian's own): the script reads it and hands it over with the instructions;
 #   - whatever isn't on those lists is denied, never asked.
 # Checked on Claude Code 2.1: curl, python, touch, redirects, `jian x && other`, jian commands off the list, and
 # reads or writes outside those folders (cat and ls included) are all refused.
@@ -33,6 +34,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 status=$("$JIAN" status "$video") || exit 1
 dir=$(printf '%s\n' "$status" | sed -n '1s/  profile=.*//p')
 work=$(printf '%s\n' "$status" | sed -n 's/^work folder: \(.*\)  style guide: .*/\1/p')
+style=$(printf '%s\n' "$status" | sed -n 's/^work folder: .*  style guide: \(.*\)/\1/p')
 [ -d "$dir" ] && [ -d "$work" ] || { echo "night: can't read the video and work folders from \`jian status\`" >&2; exit 1; }
 
 lock=$work/night.lock  # one night per video: a second run would cut the same shorts twice
@@ -60,11 +62,17 @@ step() {  # step <name> <seconds> <command...>: logged, and stopped if it runs p
   return $rc
 }
 body() { awk 'n >= 2; /^---$/ { n++ }' "$here/../.claude/skills/$1/SKILL.md"; }  # a skill without its front matter
-editor() {  # editor <skill> <request>: Claude Code headless, in the video folder, with the lists above.
+editor() {  # editor <skill> <request> [style guide]: Claude Code headless, in the video folder, with the lists above.
   # Only ever run through `step` (in the background): exec makes the job claude itself, so its time limit stops it.
+  guide=
+  [ -f "${3:-}" ] && guide="
+
+The style guide \`jian status\` names is outside the folders you can read. This is it, whole:
+
+$(cat "$3")"
   cd "$dir" && exec "$CLAUDE" -p "$(body "$1")
 
-$2 Call jian exactly as: $JIAN" \
+$2 Call jian exactly as: $JIAN$guide" \
     --restricted --strict-mcp-config --no-session-persistence --permission-mode dontAsk \
     --tools "Bash,Read,Write,Edit,Glob,Grep" \
     --allowedTools "Bash($JIAN status *)" "Bash($JIAN prep *)" "Bash($JIAN map *)" "Bash($JIAN words *)" \
@@ -96,7 +104,7 @@ done
 [ "$pass" -eq 1 ] && [ "$have" -ge "$count" ] && say "shorts: $have already cut, $count wanted: nothing to do"
 if [ "${NIGHT_RECAP:-0}" = 1 ]; then
   step recap "${NIGHT_RECAP_TIMEOUT:-7200}" editor jian-edit \
-    "Do it now for the video folder $dir (work folder: $work). Nobody is watching: don't ask, finish and report." \
+    "Do it now for the video folder $dir (work folder: $work). Nobody is watching: don't ask, finish and report." "$style" \
     || say "recap: left for you (/jian-edit $(basename "$dir"))"
 fi
 step queue 120 "$JIAN" queue --announce || failed=1
