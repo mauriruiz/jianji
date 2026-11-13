@@ -84,6 +84,13 @@ read_lead = 0.4            # ...and at least this + its characters / read_cps (s
 read_cps = 13              # our texts compete with the picture and the captions)
 max_dur = 4.5              # a text needing longer is too long: shorten the words, not the time
 
+[hook]                     # how the cut opens (QA `hook`): the first seconds decide whether anyone stays. A cut that
+seconds = 3.0              # opens on speech opens on its line: the first sentence lands inside these seconds (a warning),
+pause_max = 1.0            # said in one go (at most this long, s, from one word's start to the next inside that sentence),
+# and never on a run-up. Put the ones you say in your layer: `[hook] preamble` in profiles/short.toml (replaces this list)
+preamble = ["so", "well", "okay", "ok", "alright", "anyway", "hi", "hello", "hey", "welcome",
+            "bueno", "vale", "pues", "entonces", "a ver", "o sea", "hola"]
+
 [shots]                    # least time on screen per picture shot (B-roll, picture-led clips), by type: the edit
 place = 2.0                # labels each one ("shot"); establishing: facade, counter, sign, street
 detail = 1.2               # a product, a dish, a detail

@@ -134,7 +134,7 @@ def compile_edit(p: Project, edit_arg: str | None, sources: dict) -> tuple[dict,
             sources[c["src"]]["motion"] = motion(p, c["src"], cat["sources"][c["src"]])
     try:
         tl = compile_timeline(edit, sources, p.cfg["cut"], p.cfg.get("timeline"), p.cfg.get("texts"), p.cfg.get("shots"),
-                              p.cfg.get("layouts"))
+                              p.cfg.get("layouts"), p.cfg.get("hook"))
         outro = p.cfg.get("outro") or {}
         if p.profile in outro.get("profiles", ["short"]):  # your closing line, on the profiles you want it on
             tl = add_outro(tl, outro, p.cfg.get("texts"))
@@ -216,7 +216,7 @@ def run_qa_cmd(p: Project, v: int, tl: dict | None = None, sources: dict | None 
     with p.timed("qa", v=v):
         res = run_qa(tl, sources, outs, Engine(p.cfg["asr"], p.cfg["glossary"]), p.cfg["captions"], p.cfg["render"],
                      zone=p.cfg.get("safe_zone"), reuse=reuse, cut=p.cfg["cut"], vision=frames,
-                     texts=p.cfg.get("texts"), shots=p.cfg.get("shots"), ocr=words_on_screen,
+                     texts=p.cfg.get("texts"), shots=p.cfg.get("shots"), ocr=words_on_screen, hook=p.cfg.get("hook"),
                      never=p.cfg.get("never_show"), allow=(p.cfg.get("stream") or {}).get("allow_emails"))
     loud = (outs or {}).get("loudnorm_input") or (reuse or {}).get("loudnorm")
     if loud:  # the mix's measured loudness: `jian resolve` gives every clip the same gain the master got

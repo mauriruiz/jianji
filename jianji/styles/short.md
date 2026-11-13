@@ -43,7 +43,10 @@ video stays in that video's `jianji/feedback.log`. Rules change only after you a
   short talking-head stretch next to it; a short piece between jump cuts is yours to fix: merge it into a neighbour
   (keep the pause, `"keep": ["pauses"]`), extend or drop it.
 - Audit every join in the cut reel (`jian cuts <name>`) before calling the pacing done.
-- Hook (0-3 s): the most spectacular shot in the material, in motion from the first frame, no fade-in.
+- Hook (0-3 s): the most spectacular shot in the material, in motion from the first frame, no fade-in. A cut that
+  opens on speech opens on its strongest line, said in one go: no run-up before it ("so", "well"), no pause
+  inside it, the sentence over inside those seconds. Name it in the edit (`"hook": "<the line>"`); compile warns
+  and QA (`hook`, tuned in `[hook]`) fails an opening that isn't one.
 
 ## Sound
 

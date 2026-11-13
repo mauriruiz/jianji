@@ -31,6 +31,15 @@ Small habits on stream that make the recap much better. jian hears them (`jian m
 a vertical short in `jianji/shorts/<n>/`, with `preview.mp4` to watch on a phone and its own Resolve timeline. Say
 "mark that" on stream when something deserves one.
 
+Each short opens on its strongest line, and QA's `hook` check holds it to that: no run-up word first, no halting
+start. The words you tend to start with ("so", "okay", your own) go in your layer, and they replace the built-in list:
+
+```toml
+# ~/.config/jianji/profiles/short.toml
+[hook]
+preamble = ["so", "okay", "well", "you know"]
+```
+
 Tell jian once where the camera and the code are in your scene, as regions of the recording, and the shorts stack
 them (camera over code); the editor zooms the bottom panel on the lines you're talking about:
 

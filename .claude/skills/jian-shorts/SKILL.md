@@ -21,7 +21,8 @@ or `vedit/` in older folders) and the shorts that already exist.
 ## 1. Read
 
 1. `jian status <name>`. No catalog: `jian prep <name>` then `jian map <name>` (minutes; wait for them).
-2. Read `stream.md` (one row per minute: cues, what's on screen, privacy hits), `transcript.md` and, if it exists,
+2. Read `brief.md` in the video folder (what the user wants from this video and its shorts, and what must never
+   show), `stream.md` (one row per minute: cues, what's on screen, privacy hits), `transcript.md` and, if it exists,
    `shorts.md` (candidates the recap's editor already wrote down) and `stream_map.md`.
 
 ## 2. Choose
@@ -31,9 +32,20 @@ alone for someone who never saw the stream, 20-60 s:
 
 - a result ("mark that" / "marca eso" and "it works" cues in `stream.md` point at them), a bug found and fixed, a
   decision explained, a chat question answered well;
-- it opens on its strongest sentence (no "so, as I was saying"), and ends on a sentence that closes the idea;
+- it ends on a sentence that closes the idea;
 - nothing private: skip any minute with a privacy hit in `stream.md` unless a `blur` box can cover it;
 - never two candidates telling the same moment.
+
+**Choose by the opening line.** The first three seconds decide whether anyone watches the rest, so every candidate
+needs a hook: the one sentence in the moment that would stop a stranger. The claim, the question, the surprise, the
+result ("this is designed wrong", "you can't copy a Vec"). It has to:
+
+- make sense with no context at all, and promise what the short then delivers;
+- be said in one go: no "um" inside it, no long pause, about three seconds or less;
+- be the user's own words, as said. Never write one for them.
+
+Find it before anything else, with `jian words` on the moment. A moment with no such sentence isn't a candidate,
+however good the topic. Rank the candidates by their hook, strongest first, and take them in that order.
 
 No candidate worth a short: make none and say so. A weak short costs the user more than no short.
 
@@ -49,6 +61,7 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
   "v": 1, "profile": "short",
   "title": "Why the tick rate is a u32",
   "why": "said 'mark that' at 1:12:40; a decision explained in 40 s",
+  "hook": "A tick can't be a float",
   "clips": [
     {"id": "c1", "src": "A", "from": 8421, "to": 8467, "layout": "code", "why": "the claim"},
     {"id": "c2", "src": "A", "from": 8490, "to": 8552, "layout": "code", "crop": [0.1, 0.2, 0.42, 0.75],
@@ -60,6 +73,10 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
 
 - `title` (under 60 characters, in the language spoken) and `why` are what the user sees when they choose: say what
   the short is about, plainly.
+- `"hook"`: the opening line, as said. The first clip starts on its first word: leave out whatever runs up to it
+  ("so", "well", "what I realised is that"), even in the middle of a sentence, when what is left stands as a sentence.
+  When the strongest line comes late in the moment (the conclusion, the result), open on it and then tell the moment
+  from its start: clips play in the order you list them, not the stream's. Never the same words twice.
 - Speech by word id (`from`/`to`, `cut` for ranges to drop inside), exactly as in `/jian-edit`: never timestamps,
   every clip ends on a clause or sentence end. `jian words <name> <src> <a> <b>` shows the ids of a range.
 - Look before you frame: `jian sheet <name> <src> <a> <b>` (seconds) writes a contact sheet of that stretch of the
@@ -70,14 +87,16 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
   ([x0, y0, x1, y1] of the source, 0-1) replaces the bottom region: zoom on the lines being talked about (the
   "Where the activity is" list in `stream.md`), keeping roughly the panel's shape. No layouts defined, or the camera
   alone tells it: leave `layout` out and the frame is cropped to the centre.
-- One `texts` line as a hook in the first second, at most; captions are burned in by the profile, and the user's
-  outro (if they have one) is added by jian. Don't write either.
+- One `texts` line in the first second, at most: it names what the short is about and doesn't repeat the hook's
+  words. Captions are burned in by the profile, and the user's outro (if they have one) is added by jian. Don't write
+  either.
 - `"blur": [[x0, y0, x1, y1]]` (of the output frame) on a clip covers something private.
 
 ## 4. Render and check
 
 1. `jian compile <name> --short <n>`: fix every rejection and read every warning ("lands mid-sentence" is a QA fail
-   waiting to happen).
+   waiting to happen). An `opening:` warning means the first seconds are weak (a run-up word, a halting line, a
+   first sentence that lands late, or not the hook you named): open on another line, don't argue with it.
 2. `jian cut <name> --short <n>`: renders it, runs QA, writes the Resolve timeline and `shorts/<n>/preview.mp4`.
 3. QA `fail`: fix it in `edit.v002.json` and cut again, once. Still failing: leave it and report it; a `privacy` fail
    you can't blur away means the short is dropped (delete nothing: say it).
