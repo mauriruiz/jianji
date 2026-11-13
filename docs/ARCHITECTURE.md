@@ -178,6 +178,7 @@ two-panel cuts back yet.
 | `jian queue [--json] [--all]` | the candidates: id, title, seconds, QA, the preview's path. `--all` adds the judged, the failed and the unrendered. `--announce` fires `on_queue_ready` when something waits |
 | `jian approve <id>` | writes `<[queue] upload>/<video>-<n> <title>/`: the FCPXML on the original recording, its text boxes, the captions, `IMPORT.md`, `preview.mp4`, `title.txt`. No final render: that happens in Resolve, by hand. A failed or unchecked short needs `--force` |
 | `jian reject <id>` | takes it off the list. Nothing is deleted; a new cut of it is a candidate again |
+| `jian requeue <id>` | undoes a yes or a no: the short waits again. An approved short's upload folder is removed only while it is exactly what approve wrote; with a file of yours in it (added or changed), it stays and jian names the files |
 | `jian queue --protected` | the recordings a waiting short still needs (cited by a timeline in the upload folder, or by a candidate): what a clean-up of yours must not delete. Moving a folder out of the upload folder releases its recording |
 
 The state is one file, `shorts/<n>/state.json`. `jian clean` never deletes footage, protected or not.
