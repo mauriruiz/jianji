@@ -28,31 +28,38 @@ def _upload() -> Path | None:
     return Path(up).expanduser() if up else None
 
 
+def look(sd: Path) -> dict | None:
+    """One short's folder: its latest edit, where it stands and what there is to show for it. state: pending
+    (rendered, QA pass or warn, not judged yet), approved, rejected, failed (QA failed: fix it or approve it by hand
+    with --force), unchecked (cut with --no-qa) or unrendered. None: no edit yet."""
+    edits = sorted(sd.glob("edits/edit.v[0-9][0-9][0-9].json"))
+    if not edits:
+        return None
+    v = version_of(edits[-1])
+    edit = read_json(edits[-1])
+    tl = read_json(sd / "renders" / f"timeline.v{v:03d}.json") or {}
+    qa = (read_json(sd / "renders" / f"qa.v{v:03d}.json") or {}).get("status")
+    ready = (sd / "renders" / f"final.v{v:03d}.mp4").exists() and (sd / "preview.mp4").exists()
+    st = read_json(sd / "state.json", {})
+    state = st.get("state") if st.get("v") == v else None  # a new cut of a judged short is a candidate again
+    state = state or ("unrendered" if not ready else "failed" if qa == "fail" else "pending" if qa else "unchecked")
+    return {"short": sd.name, "v": v, "state": state, "title": " ".join(str(edit.get("title") or "").split())[:80],
+            "why": str(edit.get("why") or "")[:300], "seconds": (tl.get("stats") or {}).get("seconds"), "qa": qa,
+            "preview": str(sd / "preview.mp4"), "dir": str(sd),
+            **({"dest": st["dest"]} if state == "approved" and st.get("dest") else {})}
+
+
 def shorts() -> list[dict]:
-    """Every short under videos_root (video folders one or two levels down). state: pending (rendered, QA pass or
-    warn, not judged yet), approved, rejected, failed (QA failed: fix it or approve it by hand with --force),
-    unchecked (cut with --no-qa) or unrendered."""
+    """Every short under videos_root (video folders one or two levels down), as `look` sees it."""
     root = _root()
     found = {e.parent for n in (WORK, LEGACY) for pat in (f"*/{n}/shorts/*/edits", f"*/*/{n}/shorts/*/edits")
              for e in root.glob(pat)}
     out = []
     for sd in found:
-        edits = sorted(sd.glob("edits/edit.v[0-9][0-9][0-9].json"))
-        if not edits:
-            continue
-        v = version_of(edits[-1])
-        edit = read_json(edits[-1])
-        tl = read_json(sd / "renders" / f"timeline.v{v:03d}.json") or {}
-        qa = (read_json(sd / "renders" / f"qa.v{v:03d}.json") or {}).get("status")
-        ready = (sd / "renders" / f"final.v{v:03d}.mp4").exists() and (sd / "preview.mp4").exists()
-        st = read_json(sd / "state.json", {})
-        state = st.get("state") if st.get("v") == v else None  # a new cut of a judged short is a candidate again
-        state = state or ("unrendered" if not ready else "failed" if qa == "fail" else "pending" if qa else "unchecked")
-        video = str(sd.parents[2].relative_to(root))
-        out.append({"id": f"{video}:{sd.name}", "video": video, "short": sd.name, "v": v, "state": state,
-                    "title": " ".join(str(edit.get("title") or "").split())[:80], "why": str(edit.get("why") or "")[:300],
-                    "seconds": (tl.get("stats") or {}).get("seconds"), "qa": qa, "preview": str(sd / "preview.mp4"),
-                    "dir": str(sd), **({"dest": st["dest"]} if state == "approved" and st.get("dest") else {})})
+        it = look(sd)
+        if it:
+            video = str(sd.parents[2].relative_to(root))
+            out.append({"id": f"{video}:{sd.name}", "video": video, **it})
     return sorted(out, key=lambda x: (x["video"], x["short"].zfill(6)))
 
 

@@ -53,6 +53,20 @@ def test_queue_lists_what_waits_and_announces_it(stream, layer):
     assert q.protected() == [str(rec.resolve())]  # a candidate nobody judged yet still needs its recording
 
 
+def test_status_says_where_every_short_stands(stream, layer, capsys):
+    base, rec, video, p = stream
+    up, facts, listed = layer
+    (p.out.parent / "2").mkdir()  # a short someone started and never wrote
+    stands = lambda: capsys.readouterr() and cli.main(["status", str(video.dir)]) or \
+        next(x for x in capsys.readouterr().out.splitlines() if x.startswith("shorts: "))
+    assert stands() == f"shorts: 1 pending, 2 empty  (jian status {video.dir.name} --short <n>)"
+    write_json(p.out / "renders" / "qa.v001.json", {"status": "fail", "summary": "QA: fail", "checks": [], "issues": []})
+    assert stands().startswith("shorts: 1 failed, 2 empty")
+    (p.out / "renders" / "qa.v001.json").unlink()
+    assert stands().startswith("shorts: 1 unchecked")  # cut with --no-qa
+    (p.out.parent / "2").rmdir()
+
+
 def test_approve_makes_a_resolve_project_on_the_original(stream, layer):
     base, rec, video, p = stream
     up, facts, listed = layer

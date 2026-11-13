@@ -493,15 +493,20 @@ def through_speech(tl: dict, sources: dict, cut: dict) -> list[dict]:
 
 def breathing(tl: dict, sources: dict, heard: np.ndarray, cut: dict) -> list[dict]:
     """Measure, on the render's own audio, the quiet at every cut: from where the last word audibly decays to
-    where the next audibly starts. Independent of the plan, so it also catches what a render does to it."""
+    where the next audibly starts. Independent of the plan, so it also catches what a render does to it.
+    Quiet is the voice being gone, as compile plans it: under the speaker's level by 10 dB (or the noise floor +
+    tail_db, in a room quieter than that). On a stream the room never gets near the floor: music, keys, a noise gate
+    that leaves the floor far under the room; measured against the floor alone, a real pause there counted as none."""
     from .compile import decay_end, gaps, onset_start
     env = envelope(heard)
     src = {"env": env, "floor": float(np.percentile(env, 10))}
+    mids = [env[min(int((a + b) * 50), len(env) - 1)] for _, _, a, b in _pieces_words(tl, sources)]
+    db = max(cut["tail_db"], float(np.median(mids)) - 10 - src["floor"]) if mids else cut["tail_db"]
     G = gaps(cut)
     out = []
     for j in joins(tl, sources):
-        dec = decay_end(src, j["end"], j["start"], cut["tail_db"])
-        ons = onset_start(src, j["start"], dec, cut["tail_db"])
+        dec = decay_end(src, j["end"], j["start"], db)
+        ons = onset_start(src, j["start"], dec, db)
         j["quiet"] = round(max(0.0, ons - dec), 3)
         j["min"] = G[j["class"]][0]
         j["tight"] = j["quiet"] < j["min"] - 0.03

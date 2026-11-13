@@ -319,8 +319,9 @@ def status(p: Project):
         print("layouts: " + ("; ".join(f"{k} (top {v.get('top')}, bottom {v.get('bottom')}"
                                        f"{', ' + str(v['note']) if v.get('note') else ''})"
                                        for k, v in (p.cfg.get("layouts") or {}).items()) or "none defined"))
-    shorts = sorted(x.name for x in (p.out / "shorts").glob("*") if x.is_dir())
-    if shorts:
+    from .queue import look
+    shorts = [f"{x.name} {(look(x) or {'state': 'empty'})['state']}" for x in sorted((p.out / "shorts").glob("*")) if x.is_dir()]
+    if shorts:  # where each one stands: pending (waiting for your yes or no), failed (QA), approved, rejected...
         print(f"shorts: {', '.join(shorts)}  (jian status {p.dir.name} --short <n>)")
     free = shutil.disk_usage(p.out).free / 1e9
     print(f"disk: {free:.0f} GB free (minimum {p.cfg['disk']['min_free_gb']})")
