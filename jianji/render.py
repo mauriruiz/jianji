@@ -433,7 +433,8 @@ def write_ass(cues, tl: dict, path: Path, height: int, cap_cfg: dict | None = No
     look_of = {st: text_style(tc, st) for st in ("txt", "hi", "chat", "chapter")}
     lab = round(min(height / 30, w / 34))  # a vertical review is narrow: the label must not run into the timecode
     lines = [
-        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {height}", "WrapStyle: 0", "",
+        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {height}", "WrapStyle: 0",
+        "YCbCr Matrix: None", "",  # colours as written: left unsaid, libass bends them as if picked on BT.601 video
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, "

@@ -79,6 +79,20 @@ def test_line_spacing_opens_the_lines_and_adds_no_words(tmp_path):
     assert abs((b1 - a1) - (b0 - a0) - 0.5 * 48) <= 2  # half a line more between the two
 
 
+def test_colours_come_out_as_written(tmp_path):
+    """libass bends the colours of a script that doesn't say which matrix they were picked on: a yellow of
+    (255, 215, 0) came out (255, 204, 0)."""
+    tl = {**TL, "texts": [{"id": "h1", "text": "MMMM\nMMMM", "style": "hi", "rec": 0, "n": 30}]}
+    ass = write_ass([], tl, tmp_path / "h.ass", H, None, {"font": "Helvetica", "size": 0.1, "hi_colour": "&H0000D7FF"},
+                    labels=False)
+    raw = subprocess.run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", f"color=c=black:s={W}x{H}:r=10:d=1", "-vf",
+                          f"setparams=colorspace=bt709,{burn(ass.name)}", "-frames:v", "1", "-pix_fmt", "rgb24", "-f",
+                          "rawvideo", "-"], capture_output=True, check=True, cwd=tmp_path).stdout
+    img = np.frombuffer(raw, np.uint8).astype(int).reshape(H, W, 3)
+    box = img[(img[..., 0] > 200) & (img[..., 2] < 60)]
+    assert len(box) > 1000 and np.abs(np.median(box, 0) - (255, 215, 0)).max() <= 3, np.median(box, 0)
+
+
 def test_fonts_in_your_layer_are_found(tmp_path, monkeypatch):
     monkeypatch.setattr(core, "HOME", tmp_path)
     assert burn("x.ass") == "subtitles=filename=x.ass"

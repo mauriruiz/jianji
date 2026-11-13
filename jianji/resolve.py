@@ -129,7 +129,7 @@ def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
         fs = look.get("size", st["size"] * H)  # as burned, in libass pixels
         cx, top = (pl["cx"], pl["top"]) if pl else (W / 2, st["margin_v"] * H)
         lines = words.count("\n") + 1
-        back = st["back"] if st["back"] != "&H00000000" else None
+        back = mine["back"] if st["back"] != "&H00000000" else None
         it = {"text": t["id"], "words": words, "style": t["style"], "a": a, "z": z, "cx": round(cx),
               "cy": round(top + lines * fs * st.get("line_spacing", 1) / 2), "font": look.get("font", mine["font"]),
               "fs": round(fs, 1), "size": round(fs * mine["size"] / st["size"] * rs.get("em", EM) * 1080 / H, 1),
@@ -139,7 +139,7 @@ def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
         if back:  # the box alone: libass draws it, the fill is transparent
             it["back"] = _rgba(back)
             one = {**tl, "texts": [t]}
-            ass = write_ass([], one, out / f"{t['id']}.ass", H, p.cfg["captions"], tx, labels=False,
+            ass = write_ass([], one, out / f"{t['id']}.ass", H, p.cfg["captions"], rs, labels=False,
                             glossary=p.cfg.get("glossary", []), place={"texts": {t["id"]: pl}} if pl else {})
             ass.write_text(re.sub(r"(?m)^(Style: (?:Hi|Chat|Chapter),[^,]*,[^,]*,&H)..", r"\1FF", ass.read_text()))
             png = out / f"{t['id']}-box.png"  # one dot only: Resolve looks for "x.png" when the file is "x.box.png"
