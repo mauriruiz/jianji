@@ -22,6 +22,7 @@
   jian queue [--json] [--all]       shorts waiting for your yes or no (--announce: tell your on_queue_ready hook)
   jian approve <id> [--force]       a short into your upload folder as a Resolve project (never a final render)
   jian reject <id>                  a short out of the queue (nothing is deleted)
+  jian requeue <id>                 undo a yes or a no: the short waits again (an untouched upload folder goes too)
   jian hook <event> [KEY=VALUE]...  run your hook for an event by hand (to try it, or from your own scripts)
 
 Shorts out of a long video: compile, cut, qa, cuts, texts, resolve, at and status take `--short <n>` and work in
@@ -644,7 +645,7 @@ def main(argv=None):
     qu.add_argument("--all", action="store_true", help="also approved, rejected, failed QA and unrendered")
     qu.add_argument("--announce", action="store_true", help="fire on_queue_ready when something is waiting")
     qu.add_argument("--protected", action="store_true", help="list the recordings a waiting short still needs")
-    for name in ("approve", "reject"):
+    for name in ("approve", "reject", "requeue"):
         j = sub.add_parser(name)
         j.add_argument("id", help="<video>:<n>, as `jian queue` prints it")
         if name == "approve":
@@ -672,11 +673,11 @@ def _run(args):
         if any("=" not in x for x in args.facts):
             die("facts are KEY=VALUE")
         return hook(args.event, **{k.lower(): v for k, v in (x.split("=", 1) for x in args.facts)})
-    if args.cmd in ("queue", "approve", "reject"):
+    if args.cmd in ("queue", "approve", "reject", "requeue"):
         from . import queue as q
         if args.cmd == "queue":
             return print("\n".join(q.protected())) if args.protected else q.queue(args.json, args.all, args.announce)
-        q.approve(args.id, args.force) if args.cmd == "approve" else q.reject(args.id)
+        q.approve(args.id, args.force) if args.cmd == "approve" else q.reject(args.id) if args.cmd == "reject" else q.requeue(args.id)
         return
     if args.cmd == "new":
         return new(args.video, args.profile)

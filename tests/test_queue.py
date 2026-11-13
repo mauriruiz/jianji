@@ -108,6 +108,45 @@ def test_reject_deletes_nothing_and_a_new_cut_comes_back(stream, layer):
     assert [x["state"] for x in listed()] == ["pending"]
 
 
+def test_requeue_undoes_a_yes_or_a_no_and_never_deletes_your_work(stream, layer, capsys):
+    base, rec, video, p = stream
+    up, facts, listed = layer
+    undo = lambda: capsys.readouterr() and cli.main(["requeue", SID]) or capsys.readouterr().out
+    with pytest.raises(SystemExit, match="is pending: there is no yes or no to undo"):
+        cli.main(["requeue", SID])
+    cli.main(["reject", SID])
+    files = sorted(x for x in p.out.rglob("*") if x.is_file() and x.name != "state.json")
+    assert undo() == f"{SID} is pending again\n" and [x["state"] for x in listed()] == ["pending"]
+    assert sorted(x for x in p.out.rglob("*") if x.is_file()) == files  # a no taken back: nothing else moved
+    cli.main(["approve", SID])
+    (dest,) = up.iterdir()
+    (dest / ".DS_Store").write_bytes(b"finder")  # you opened the folder: that isn't touching it
+    out = undo()
+    assert out.startswith(f"{SID} is pending again\n  removed {dest}") and not dest.exists() and up.is_dir()
+    assert [x["state"] for x in listed()] == ["pending"] and q.protected() == [str(rec.resolve())]
+    cli.main(["approve", SID])  # approved again, and this time you worked on it
+    (dest / "from-resolve" / "mine.fcpxml").write_text("<fcpxml/>")
+    (dest / "title.txt").write_text("My better title\n")
+    before = sorted(x for x in dest.rglob("*") if x.is_file())
+    out = undo()
+    assert "kept" in out and "you added or changed from-resolve/mine.fcpxml, title.txt" in out and "Nothing was deleted" in out
+    assert sorted(x for x in dest.rglob("*") if x.is_file()) == before and [x["state"] for x in listed()] == ["pending"]
+    cli.main(["approve", SID])  # into the folder that stayed: jian rewrites its own files, and yours is still yours
+    out = undo()
+    assert "you added or changed from-resolve/mine.fcpxml." in out and (dest / "from-resolve" / "mine.fcpxml").exists()
+    cli.main(["approve", SID])
+    (dest / "from-resolve" / "mine.fcpxml").unlink()
+    (dest / "preview.mp4").unlink()  # deleting a file isn't work to protect
+    assert "removed" in undo() and not dest.exists()
+    cli.main(["approve", SID])
+    st = core.read_json(p.out / "state.json")
+    write_json(p.out / "state.json", {k: v for k, v in st.items() if k != "files"})  # approved by a jian that kept no record
+    assert "can't tell" in undo() and dest.exists()
+    write_json(p.out / "renders" / "qa.v001.json", {"status": "fail", "summary": "QA: fail", "checks": [], "issues": []})
+    cli.main(["approve", SID, "--force"])
+    assert "is failed again" in undo()  # taken by hand, given back: it's the QA failure it was
+
+
 def test_a_short_that_failed_qa_never_reaches_the_queue(stream, layer):
     base, rec, video, p = stream
     up, facts, listed = layer

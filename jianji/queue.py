@@ -2,12 +2,14 @@
 
 `jian queue` lists the candidates (every short under videos_root whose latest cut is rendered and passed QA),
 `jian approve <id>` puts one in your upload folder as a DaVinci Resolve project on the original footage (timeline,
-text boxes, captions, IMPORT.md, the preview), `jian reject <id>` drops it from the list. Nothing here renders a
-final file, publishes or deletes anything. A candidate's id is `<video>:<n>`; its state lives in
+text boxes, captions, IMPORT.md, the preview), `jian reject <id>` drops it from the list, `jian requeue <id>` undoes
+either. Nothing here renders a final file or publishes anything, and the only thing ever deleted is an upload folder
+exactly as approve left it, when you take the approval back. A candidate's id is `<video>:<n>`; its state lives in
 <video>/jianji/shorts/<n>/state.json.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -118,10 +120,12 @@ def approve(sid: str, force: bool = False) -> Path:
     slug = re.sub(r"[^\w -]+", "", it["title"]).strip()[:50]
     dest = Path(it["dest"]) if it.get("dest") and Path(it["dest"]).is_dir() else up / f"{Path(it['video']).name}-{it['short']} {slug}".strip()
     p = Project(str(_root() / it["video"]), short=it["short"])
+    had = _touched(dest)  # a folder that was already there may hold files of yours
     export(p, it["v"], out=dest)
     shutil.copy2(it["preview"], dest / "preview.mp4")
     (dest / "title.txt").write_text(f"{it['title']}\n\n{it['why']}\n")
-    _judge(it, "approved", dest=str(dest))
+    wrote = {k: h for k, h in _files(dest).items() if had.get(k) != _touched(dest)[k]}  # what jian put there, just now:
+    _judge(it, "approved", dest=str(dest), files=wrote)  # `requeue` removes the folder only while it holds nothing else
     hook("approve", id=sid, video=it["video"], short=it["short"], dir=dest)
     print(dest)  # last line: the folder, for scripts
     return dest
@@ -133,3 +137,41 @@ def reject(sid: str):
     _judge(it, "rejected")
     hook("reject", id=sid, video=it["video"], short=it["short"])
     print(f"{sid} rejected")
+
+
+def _files(dest: Path) -> dict[str, str]:
+    """What an upload folder holds, {path inside it: content hash}. Finder's own .DS_Store isn't yours or jian's."""
+    return {str(f.relative_to(dest)): hashlib.sha1(f.read_bytes()).hexdigest()
+            for f in sorted(dest.rglob("*")) if f.is_file() and f.name != ".DS_Store"}
+
+
+def _touched(dest: Path) -> dict[str, int]:
+    """{path inside the folder: when the file last changed in any way}: a file jian writes again moves on, even when
+    it writes the same bytes; a file of yours it never opens doesn't."""
+    return {str(f.relative_to(dest)): f.stat().st_ctime_ns for f in dest.rglob("*") if f.is_file()} if dest.is_dir() else {}
+
+
+def requeue(sid: str):
+    """Undo a yes or a no: the short waits in the queue again. If it was approved, its folder in your upload folder
+    goes too, but only while it is exactly what approve wrote: a file you added or changed there (a note, a Resolve
+    export) means the folder stays, whole, and jian says which files. Nothing else is touched."""
+    it = _find(sid)
+    if it["state"] not in ("approved", "rejected"):
+        die(f"{sid} is {it['state']}: there is no yes or no to undo")
+    sd = Path(it["dir"])
+    st = read_json(sd / "state.json", {})
+    dest, up, note = Path(st.get("dest") or ""), _upload(), ""
+    if it["state"] == "approved" and st.get("dest") and dest.is_dir():
+        now, then = _files(dest), st.get("files")
+        yours = sorted(k for k in now if then is not None and then.get(k) != now[k])
+        if then is None:  # approved before jian kept track of what it wrote
+            note = f"\n  kept {dest}: this jian can't tell whether you changed it. Delete it yourself if you didn't"
+        elif yours:
+            note = f"\n  kept {dest}: you added or changed {', '.join(yours)}. Nothing was deleted"
+        elif not up or dest.parent.resolve() != up.resolve():
+            note = f"\n  kept {dest}: it isn't in your upload folder any more"
+        else:
+            shutil.rmtree(dest)
+            note = f"\n  removed {dest} (untouched since you approved it)"
+    (sd / "state.json").unlink()
+    print(f"{sid} is {look(sd)['state']} again{note}")
