@@ -84,3 +84,19 @@ def test_fonts_in_your_layer_are_found(tmp_path, monkeypatch):
     assert burn("x.ass") == "subtitles=filename=x.ass"
     (tmp_path / "fonts").mkdir()
     assert burn("x.ass", ":alpha=1") == f"subtitles=filename=x.ass:alpha=1:fontsdir={tmp_path / 'fonts'}"
+
+
+def test_a_text_sits_at_its_own_margin_when_that_spot_is_free():
+    from fractions import Fraction
+
+    from jianji.place import place_texts, slots
+    zone = {"size": [1080, 1920], "top": 270, "bottom": 670, "left": 65, "right": 150}
+    rows = lambda pref: sorted({top for _, _, top in slots(1080, 1920, zone, 400, 100, pref)})
+    assert rows(288) == rows(290.5) == rows(None) and len(rows(None)) == 5  # above the zone, or a row already
+    assert rows(518) == sorted([*rows(None), 518])
+    tx = {"size": 0.046, "hi_margin_v": 0.27}
+    text = {"id": "h1", "text": "A callout this long", "style": "hi", "rec": 0, "n": 60}
+    free = [{"t": k / 4, "faces": [], "salient": []} for k in range(9)]
+    face = [{**f, "faces": [[0.1, 0.25, 0.9, 0.33, 0.9]]} for f in free]  # a face all along that row
+    at = lambda frames: place_texts([text], Fraction(30), frames, tx, 1080, 1920, zone, [], 2.0)[0]["h1"]
+    assert at(free)["top"] == 518 and at(face)["top"] != 518 and at(face)["face"] <= 0.1

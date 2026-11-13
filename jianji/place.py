@@ -74,21 +74,24 @@ def caption_lanes(cues, frames, cap: dict, W: int, H: int, alt_mv: float) -> lis
             for c in cues]
 
 
-def slots(W: int, H: int, zone: dict | None, w: float, h: float) -> list[tuple[str, float, float]]:
-    """(name, centre x, top y) candidates inside the safe zone, top to bottom, centre then left then right."""
+def slots(W: int, H: int, zone: dict | None, w: float, h: float, pref: float | None = None) -> list[tuple[str, float, float]]:
+    """(name, centre x, top y) candidates inside the safe zone, top to bottom, centre then left then right: five
+    rows, and the text's own margin (`pref`, px from the top) when it falls between them."""
     if zone:
         k = H / zone["size"][1]
         x0, y0, x1, y1 = zone["left"] * k + 20, zone["top"] * k + 20, W - zone["right"] * k - 20, H - zone["bottom"] * k
     else:
         x0, y0, x1, y1 = 0.05 * W, 0.05 * H, 0.95 * W, 0.95 * H
+    rows = [y0 + fy * (y1 - y0) for fy in (0.0, 0.14, 0.28, 0.42, 0.56)]  # of the usable height
+    if pref is not None and pref > y0 and all(abs(pref - r) > 1 for r in rows):
+        rows.append(pref)
     out = []
-    for fy in (0.0, 0.14, 0.28, 0.42, 0.56):  # of the usable height
-        top = y0 + fy * (y1 - y0)
+    for top in rows:
         if top + h > y1:
             continue
         for name, cx in (("centre", (x0 + x1) / 2), ("left", x0 + w / 2), ("right", x1 - w / 2)):
             if name == "centre" or (x0 <= cx - w / 2 and cx + w / 2 <= x1 and w < 0.7 * (x1 - x0)):
-                out.append((f"{name}@{fy:.2f}", cx, top))
+                out.append((f"{name}@{(top - y0) / (y1 - y0):.2f}", cx, top))
     return out
 
 
@@ -116,7 +119,7 @@ def place_texts(texts: list[dict], F: Fraction, frames: list[dict], tx: dict, W:
         cands = None  # slots every text of the run fits in: story lines stay centred
         for t in run:
             b = box(t.get("shown", t["text"]), 0, 0, size)
-            ok = {n: (cx, top) for n, cx, top in slots(W, H, zone, b[2] - b[0], b[3] - b[1])
+            ok = {n: (cx, top) for n, cx, top in slots(W, H, zone, b[2] - b[0], b[3] - b[1], pref)
                   if style == "hi" or n.startswith("centre")}
             cands = ok if cands is None else {n: v for n, v in cands.items() if n in ok}
         best = None
