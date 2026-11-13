@@ -58,6 +58,16 @@ def test_fcpxml_reads_back_unchanged(exported):
     assert any(m["kind"] == "section" for m in man["markers"])
 
 
+def test_a_title_resized_in_resolve_comes_back_in_burned_pixels(exported):
+    man = _man(exported)
+    got = read_fcpxml(next((exported.out / "resolve").glob("* v001.fcpxml")))
+    m = next(i for i in man["items"] if i.get("text") == "t1" and "title" in i)
+    assert m["size"] == pytest.approx(m["fs"] * 0.84 * 1080 / man["size"][1], abs=0.06)  # Resolve's units
+    next(i for i in got["items"] if i.get("title") == m["title"])["size"] = m["size"] * 1.5
+    ch, _ = changes(man, got)
+    assert ch == [{"kind": "look", "item": m["id"], "who": "t1", "size": round(m["fs"] * 1.5, 1)}]
+
+
 def _resolve_edits(p, v=1):
     """What you do in Resolve, on jian's own writer: extend the 2nd A-roll piece's end 1 s (ripple), move the
     story line 0.4 s later and reword it, raise the 3rd piece's level 3 dB."""

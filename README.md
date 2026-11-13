@@ -137,6 +137,7 @@ settings. Keep your preferences in your layer (a private git repo works well), n
   styles/short.md       your editorial rules for that profile (replaces the built-in guide)
   brand.toml            your fonts and colours
   glossary.txt          names you say often, one per line
+  fonts/                font files for burned text, found without installing them
   briefs/default.md     your brief template for `jian new`
   extensions/show.toml  settings for a series, used by `extends: show` in a brief
 ```

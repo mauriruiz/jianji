@@ -66,6 +66,10 @@ align = 2                  # ASS numpad: 2 bottom-centre
 margin_v = 0.36
 margin_l = 0.044
 margin_r = 0.089
+centre = 0.0               # above 0: every cue centred on this line (0.8 = four fifths down) instead of align + margin_v
+box = ""                   # a colour (ASS &HAABBGGRR, "&H80000000" = black at half strength): one round box per cue,
+box_radius = 0.008         # as wide as its longest line...
+box_pad = [0.008, 0.003]   # ...plus this at the sides, and above and below
 
 [texts]                    # on-screen story lines ("style": "txt") and place/price callouts ("style": "hi")
 font = "Helvetica Neue"
@@ -83,6 +87,14 @@ min_dur = 1.5              # s: every text stays up at least this long...
 read_lead = 0.4            # ...and at least this + its characters / read_cps (subtitles read at ~17 chars/s;
 read_cps = 13              # our texts compete with the picture and the captions)
 max_dur = 4.5              # a text needing longer is too long: shorten the words, not the time
+stretch = 1.0              # letter width, 1.1 = a tenth wider
+spacing = 0.0              # between letters
+line_spacing = 1.0         # line pitch against the font's own, 1.2 = a fifth more air
+
+[texts.hi]                 # callouts: any [texts] setting, for them alone (bold, size, outline = the box's padding...)
+
+[texts.resolve]            # the titles of the Resolve timeline: any [texts] setting where the title should differ
+em = 0.84                  # (bold, size, outline = the whole stroke...), and the font's em against its line height
 
 [hook]                     # how the cut opens (QA `hook`): the first seconds decide whether anyone stays. A cut that
 seconds = 3.0              # opens on speech opens on its line: the first sentence lands inside these seconds (a warning),

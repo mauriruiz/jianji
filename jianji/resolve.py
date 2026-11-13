@@ -25,7 +25,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 from xml.sax.saxutils import escape as _escape
 
-from .core import FFMPEG, Project, die, read_json, run, version_of, write_json
+from .core import FFMPEG, Project, die, merge, read_json, run, version_of, write_json
 
 
 def escape(s) -> str:
@@ -103,39 +103,48 @@ def _loud_gain(p: Project, tl: dict, cat: dict, v: int) -> float:
     return round(p.cfg["render"]["loudness"] - i, 2) if i > -70 else 0.0
 
 
+EM = 0.84  # libass sizes a font by its line height, Resolve by its em: Helvetica Neue's ratio ([texts.resolve] em)
+
+
 def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
     """Each text as a title: its words (glossary spelling, line breaks), style, time and centre; callouts also get
-    their yellow box alone as a transparent PNG (the wording stays editable in the title above it)."""
-    from .place import box
-    from .render import CAP, SCALE, shown, write_ass
+    their yellow box alone as a transparent PNG (the wording stays editable in the title above it).
+
+    Resolve draws a title of size s with an em of s x (frame height / 1080) px, and its stroke astride the edge of
+    the letters, half of it eating into them (measured on Resolve 21): the size goes out in those units, the
+    outline as the whole stroke. [texts.resolve] holds what the title should get where that isn't it."""
+    from .render import burn, shown, text_style, write_ass
     F = Fraction(tl["fps"])
     W, H = tl["size"]
-    tx = {**CAP, "bold": True, **(p.cfg.get("texts") or {})}
-    size = tx["size"] * H
+    tx = p.cfg.get("texts") or {}
+    rs = merge(tx, tx.get("resolve") or {})
     out.mkdir(parents=True, exist_ok=True)
     res = []
     for t in tl.get("texts", []):
         pl = (place.get("texts") or {}).get(t["id"])
         a, z = (pl["a"], pl["z"]) if pl else (float(t["rec"] / F), float((t["rec"] + t["n"]) / F))
-        words = shown(t, p.cfg.get("glossary", []), p.cfg.get("texts") or {}).replace(" ", " ")
+        words = shown(t, p.cfg.get("glossary", []), tx).replace(" ", " ")
         look = t.get("look") or {}
-        fs = look.get("size", size * SCALE.get(t["style"], 1))
-        cx, top = (pl["cx"], pl["top"]) if pl else (W / 2, tx.get(f"{t['style']}_margin_v", tx.get("margin_v", 0.15)) * H)
-        b = box(words, cx, top, fs)
-        it = {"text": t["id"], "words": words, "style": t["style"], "a": a, "z": z, "cx": round(cx), "cy": round((b[1] + b[3]) / 2),
-              "font": look.get("font", tx["font"]), "size": round(fs), "bold": bool(tx.get("bold", True)),
-              "colour": look.get("colour", "0 0 0 1" if t["style"] == "hi" else _rgba(tx.get("colour", "&H00FFFFFF"))),
-              "outline": round(tx.get("outline", 0.004) * H, 1)}
-        back = {"hi": tx.get("hi_colour", "&H0000D7FF"), "chat": "&H50000000", "chapter": "&H30000000"}.get(t["style"])
+        st, mine = text_style(tx, t["style"]), text_style(rs, t["style"])
+        fs = look.get("size", st["size"] * H)  # as burned, in libass pixels
+        cx, top = (pl["cx"], pl["top"]) if pl else (W / 2, st["margin_v"] * H)
+        lines = words.count("\n") + 1
+        back = st["back"] if st["back"] != "&H00000000" else None
+        it = {"text": t["id"], "words": words, "style": t["style"], "a": a, "z": z, "cx": round(cx),
+              "cy": round(top + lines * fs * st.get("line_spacing", 1) / 2), "font": look.get("font", mine["font"]),
+              "fs": round(fs, 1), "size": round(fs * mine["size"] / st["size"] * rs.get("em", EM) * 1080 / H, 1),
+              "bold": bool(mine["bold"]),
+              "colour": look.get("colour", "0 0 0 1" if t["style"] == "hi" else _rgba(mine["colour"])),
+              "outline": 0 if back else round(mine["outline"] * 1080, 1)}
         if back:  # the box alone: libass draws it, the fill is transparent
             it["back"] = _rgba(back)
             one = {**tl, "texts": [t]}
-            ass = write_ass([], one, out / f"{t['id']}.ass", H, p.cfg["captions"], p.cfg.get("texts"), labels=False,
+            ass = write_ass([], one, out / f"{t['id']}.ass", H, p.cfg["captions"], tx, labels=False,
                             glossary=p.cfg.get("glossary", []), place={"texts": {t["id"]: pl}} if pl else {})
-            ass.write_text(re.sub(r"(,(?:Hi|Chat|Chapter),,0,0,0,,\{[^}]*)\}", r"\1\\1a&HFF&}", ass.read_text()))
+            ass.write_text(re.sub(r"(?m)^(Style: (?:Hi|Chat|Chapter),[^,]*,[^,]*,&H)..", r"\1FF", ass.read_text()))
             png = out / f"{t['id']}-box.png"  # one dot only: Resolve looks for "x.png" when the file is "x.box.png"
             run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c=black@0.0:s={W}x{H}:r={F}:d={z + 1:.3f},format=rgba",
-                 "-vf", f"subtitles=filename={ass.name}:alpha=1", "-ss", f"{(a + z) / 2:.3f}", "-frames:v", 1, png.name],
+                 "-vf", burn(ass.name, ":alpha=1"), "-ss", f"{(a + z) / 2:.3f}", "-frames:v", 1, png.name],
                 cwd=out)
             ass.unlink()
             it["png"] = str(png)
@@ -357,7 +366,7 @@ def write_fcpxml(pl: dict, path: Path) -> Path:
                           f'duration="{dur}"><text><text-style ref="ts_{i["text"]}">{words}</text-style></text>'
                           f'<text-style-def id="ts_{i["text"]}"><text-style font="{escape(i["font"])}" fontSize="{i["size"]}" '
                           f'fontColor="{i["colour"]}" bold="{1 if i["bold"] else 0}" strokeColor="0 0 0 1" '
-                          f'strokeWidth="{0 if i.get("back") else i["outline"]}"{back} alignment="center"/></text-style-def>'
+                          f'strokeWidth="{i["outline"]}"{back} alignment="center"/></text-style-def>'
                           f'<adjust-transform position="{_pos(i["cx"], i["cy"], W, H)}"/></title>')
         for m in pl["markers"]:
             if v["start"] <= m["frame"] < v["end"]:
@@ -382,7 +391,7 @@ GUIDE = """# {name} in DaVinci Resolve
    In the dialog: "Automatically set project settings" **on** ({w}x{h}, {fps} fps), "Automatically import source
    clips into media pool" **on**, "Use sizing information" **on** (text positions, zooms, the two panels of a short). Nothing else.
 3. File > Import > Subtitle… and pick `{srt}`; drag it from the Media Pool onto the timeline at its first frame.
-   The captions land on a subtitle track, editable.
+   The captions land on a subtitle track, editable; their look is the track's (Inspector > Track), not the file's.
 
 The media is your original footage in `{footage}` (linked by path: drag any edge to recover material) and the
 callout boxes in `{texts}`. Tracks: V1 A-roll, V2 B-roll, V3 callout boxes, V4 texts (editable titles), A1 the
@@ -622,6 +631,8 @@ def changes(man: dict, got: dict) -> tuple[list[dict], dict[int, dict]]:
                 out.append({"kind": "place", "item": m["id"], "who": who, "dx": g["cx"] - m["cx"], "dy": g["cy"] - m["cy"]})
             look = {k: g[k] for k in ("font", "size", "colour") if g.get(k) not in (None, m.get(k)) and
                     not (k == "size" and abs(float(g[k]) - m[k]) < 1)}
+            if "size" in look:  # the title's size is in Resolve's units: back to the burned text's
+                look["size"] = round(m.get("fs", m["size"]) * float(g["size"]) / m["size"], 1)
             if look:
                 out.append({"kind": "look", "item": m["id"], "who": who, **look})
         if m["track"][0] == "A":

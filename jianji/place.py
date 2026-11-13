@@ -55,7 +55,8 @@ def caption_boxes(cues, lanes, cap: dict, W: int, H: int, alt_mv: float) -> list
     out = []
     for (a, z, t), lane in zip(cues, lanes):
         n = t.count("\n") + 1
-        top = alt_mv * H if lane == "alt" else H - cap["margin_v"] * H - (n * LINE * size + size * 0.3)
+        h = n * LINE * size + size * 0.3
+        top = alt_mv * H if lane == "alt" else cap["centre"] * H - h / 2 if cap.get("centre") else H - cap["margin_v"] * H - h
         out.append((a, z, box(t, cx, top, size)))
     return out
 
@@ -100,8 +101,7 @@ def place_texts(texts: list[dict], F: Fraction, frames: list[dict], tx: dict, W:
     default. A text keeps its whole time on screen (its reading time): to get off a face it takes another slot or
     moves up to 1 s, never gets shorter or smaller. Story lines in a run (each within HOLD of the last) share one
     position, so they don't jump around; callouts each take their own slot."""
-    from .render import SCALE
-    base = tx.get("size", 0.046) * H
+    from .render import text_style
     placed, log, taken = {}, [], list(busy)
     runs = []
     for t in sorted(texts, key=lambda t: t["rec"]):
@@ -112,8 +112,7 @@ def place_texts(texts: list[dict], F: Fraction, frames: list[dict], tx: dict, W:
             runs.append([t])
     for run in runs:
         style = run[0]["style"]
-        size = base * SCALE.get(style, 1)
-        pref = tx.get(f"{style}_margin_v", {"hi": 0.27, "chat": 0.62, "chapter": 0.40}.get(style, tx.get("margin_v", 0.15))) * H
+        size, pref = (text_style(tx, style)[k] * H for k in ("size", "margin_v"))
         cands = None  # slots every text of the run fits in: story lines stay centred
         for t in run:
             b = box(t.get("shown", t["text"]), 0, 0, size)

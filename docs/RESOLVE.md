@@ -12,12 +12,16 @@ for that version; these are the same steps.
    positions, zooms, the two panels of a short). Nothing else.
 3. File > Import > Subtitle… and pick `jianji/renders/captions.vNNN.srt`; drag it from the Media Pool onto the
    timeline at its first frame. The captions land on an editable subtitle track.
+   Their look is the subtitle track's own (Inspector > Track): an SRT carries none.
 
 What you get:
 - Your original footage, linked by path: drag any edge to recover material.
 - Tracks: V1 A-roll, V2 B-roll, V3 callout boxes, V4 texts (editable titles), A1 A-roll sound, A2 B-roll sound,
   A3 room tone.
 - Markers: blue sections, yellow "check this", red tight cuts, purple QA issues.
+- Titles the size of the burned text: a Resolve title of size s has an em of s x frame height / 1080 pixels, so
+  sizes go out in those units, the outline as the stroke's whole width (Resolve draws it astride the edge of the
+  letters, half inside), and the position as the centre of the lines. `[texts.resolve]` overrides any of it.
 
 A short with two panels (camera over screen) is the same file twice: V1 is the bottom panel and V2 the top one, each
 trimmed (Inspector > Cropping) and placed (Transform), over a "fill" scaling. Compare it with `preview.mp4` before
