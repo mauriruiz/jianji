@@ -5,7 +5,8 @@
 #
 # The queue should come out full: when fewer shorts than asked for got through QA, the editor gets one more pass to
 # repair the failed ones or cut other moments in their place. Run again on the same video, it cuts only what is
-# missing (shorts you already approved or rejected count), so a second run with NIGHT_RECAP=1 adds just the recap.
+# missing: a short that waits or that you approved counts, one you rejected gets a replacement. With 0 shorts it
+# cuts none, so `NIGHT_RECAP=1 night.sh <video> 0` adds just the recap.
 #
 # The recording is untrusted input (a public chat, whatever was on screen), so the editor runs locked down:
 #   - tools: Bash, Read, Write, Edit, Glob, Grep. No web tools, no agents, no MCP servers, no user or project settings;
@@ -84,9 +85,9 @@ $2 Call jian exactly as: $JIAN$guide" \
 say "night: $video ($dir), up to $count shorts"
 step prep "${NIGHT_PREP_TIMEOUT:-14400}" "$JIAN" prep "$video" || exit 1
 step map "${NIGHT_MAP_TIMEOUT:-7200}" "$JIAN" map "$video" || exit 1
-made() {  # this video's shorts that got through QA: waiting for you, or already judged by you
+made() {  # this video's shorts that got through QA and you haven't said no to: waiting, or approved
   "$JIAN" status "$video" 2>/dev/null | sed -n 's/^shorts: \(.*\)  (jian status .*/\1/p' | tr ',' '\n' \
-    | grep -c -E ' (pending|approved|rejected)$'
+    | grep -c -E ' (pending|approved)$'
 }
 failed=0
 # shorts first: if the recap fails or runs out of time, the queue is already there
