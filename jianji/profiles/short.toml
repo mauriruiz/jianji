@@ -73,6 +73,7 @@ box_pad = [0.008, 0.003]   # ...plus this at the sides, and above and below
 
 [texts]                    # on-screen story lines ("style": "txt") and place/price callouts ("style": "hi")
 font = "Helvetica Neue"
+bold = true
 size = 0.046
 outline = 0.005
 line_chars = 17
