@@ -21,7 +21,8 @@ What you get:
 - Markers: blue sections, yellow "check this", red tight cuts, purple QA issues.
 - Titles the size of the burned text: a Resolve title of size s has an em of s x frame height / 1080 pixels, so
   sizes go out in those units, the outline as the stroke's whole width (Resolve draws it astride the edge of the
-  letters, half inside), and the position as the centre of the lines. `[texts.resolve]` overrides any of it.
+  letters, half inside), and the position as the centre of the lines, lowered by the 0.15 em Resolve raises a
+  title. `[texts.resolve]` overrides any of it.
 
 A short with two panels (camera over screen) is the same file twice: V1 is the bottom panel and V2 the top one, each
 trimmed (Inspector > Cropping) and placed (Transform), over a "fill" scaling. Compare it with `preview.mp4` before

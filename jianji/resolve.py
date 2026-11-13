@@ -103,16 +103,18 @@ def _loud_gain(p: Project, tl: dict, cat: dict, v: int) -> float:
     return round(p.cfg["render"]["loudness"] - i, 2) if i > -70 else 0.0
 
 
-EM = 0.84  # libass sizes a font by its line height, Resolve by its em: Helvetica Neue's ratio ([texts.resolve] em)
+EM = 0.84    # libass sizes a font by its line height, Resolve by its em: Helvetica Neue's ratio ([texts.resolve] em)
+RISE = 0.15  # Resolve sets a title this much of its em above the position it is given ([texts.resolve] rise)
 
 
 def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
     """Each text as a title: its words (glossary spelling, line breaks), style, time and centre; callouts also get
     their yellow box alone as a transparent PNG (the wording stays editable in the title above it).
 
-    Resolve draws a title of size s with an em of s x (frame height / 1080) px, and its stroke astride the edge of
-    the letters, half of it eating into them (measured on Resolve 21): the size goes out in those units, the
-    outline as the whole stroke. [texts.resolve] holds what the title should get where that isn't it."""
+    Resolve draws a title of size s with an em of s x (frame height / 1080) px, a little above the position it is
+    given, and its stroke astride the edge of the letters, half of it eating into them (measured on Resolve 21, two
+    titles): the size goes out in those units, the outline as the whole stroke, the centre that much lower.
+    [texts.resolve] holds what the title should get where that isn't it."""
     from .render import burn, shown, text_style, write_ass
     F = Fraction(tl["fps"])
     W, H = tl["size"]
@@ -130,9 +132,10 @@ def _texts(p: Project, tl: dict, place: dict, out: Path) -> list[dict]:
         cx, top = (pl["cx"], pl["top"]) if pl else (W / 2, st["margin_v"] * H)
         lines = words.count("\n") + 1
         back = mine["back"] if st["back"] != "&H00000000" else None
+        em = fs * mine["size"] / st["size"] * rs.get("em", EM)  # px
         it = {"text": t["id"], "words": words, "style": t["style"], "a": a, "z": z, "cx": round(cx),
-              "cy": round(top + lines * fs * st.get("line_spacing", 1) / 2), "font": look.get("font", mine["font"]),
-              "fs": round(fs, 1), "size": round(fs * mine["size"] / st["size"] * rs.get("em", EM) * 1080 / H, 1),
+              "cy": round(top + lines * fs * st.get("line_spacing", 1) / 2 + rs.get("rise", RISE) * em),
+              "font": look.get("font", mine["font"]), "fs": round(fs, 1), "size": round(em * 1080 / H, 1),
               "bold": bool(mine["bold"]),
               "colour": look.get("colour", "0 0 0 1" if t["style"] == "hi" else _rgba(mine["colour"])),
               "outline": 0 if back else round(mine["outline"] * 1080, 1)}

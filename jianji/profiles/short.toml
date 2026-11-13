@@ -95,7 +95,8 @@ line_spacing = 1.0         # line pitch against the font's own, 1.2 = a fifth mo
 [texts.hi]                 # callouts: any [texts] setting, for them alone (bold, size, outline = the box's padding...)
 
 [texts.resolve]            # the titles of the Resolve timeline: any [texts] setting where the title should differ
-em = 0.84                  # (bold, size, outline = the whole stroke...), and the font's em against its line height
+em = 0.84                  # (bold, size, outline = the whole stroke...); the font's em against its line height,
+rise = 0.15                # and how far above its position Resolve sets a title, in ems
 
 [hook]                     # how the cut opens (QA `hook`): the first seconds decide whether anyone stays. A cut that
 seconds = 3.0              # opens on speech opens on its line: the first sentence lands inside these seconds (a warning),

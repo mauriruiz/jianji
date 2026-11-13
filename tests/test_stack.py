@@ -151,14 +151,14 @@ def test_resolve_titles_are_as_big_as_the_burned_text(short, tmp_path, monkeypat
     fs, top = tx["size"] * 1920, place["texts"]["t1"]["top"]
     t1, outro = resolve._texts(p, tl, place, tmp_path / "a")
     # libass sizes a font by its line height (the em is 0.84 of it); a Resolve title of size s has an em of
-    # s x 1920 / 1080 px, and its stroke astride the edge
+    # s x 1920 / 1080 px, sits 0.15 em above its position, and has its stroke astride the edge
     assert (t1["fs"], t1["size"]) == pytest.approx((fs, fs * 0.84 * 1080 / 1920), abs=0.06)
-    assert t1["cy"] == round(top + fs / 2) and t1["bold"]  # one line: the title's centre is its middle
+    assert t1["cy"] == round(top + fs / 2 + 0.15 * 0.84 * fs) and t1["bold"]  # its middle, and Resolve's rise
     assert t1["outline"] == pytest.approx(tx["outline"] * 1080, abs=0.06) and outro["outline"] == 0  # a box, no stroke
     assert outro["size"] == t1["size"]
     monkeypatch.setitem(p.cfg, "texts", {**tx, "hi": {"size": 0.03}, "line_spacing": 1.5,
                                          "resolve": {"bold": False, "size": tx["size"] * 2, "em": 1.0, "outline": 0.01}})
     t1, outro = resolve._texts(p, tl, place, tmp_path / "b")
     assert (t1["fs"], t1["size"], t1["bold"], t1["outline"]) == (pytest.approx(fs, abs=0.06), pytest.approx(fs * 2 * 0.5625, abs=0.06), False, 10.8)
-    assert t1["cy"] == round(top + fs * 1.5 / 2)
+    assert t1["cy"] == round(top + fs * 1.5 / 2 + 0.15 * fs * 2)
     assert outro["size"] == pytest.approx(0.03 * 1080, abs=0.06)  # the callouts' own size, in both
