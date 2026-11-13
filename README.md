@@ -131,8 +131,8 @@ settings. Keep your preferences in your layer (a private git repo works well), n
 ```
 ~/.config/jianji/
   config.toml           schema = 1, videos_root, [defaults] for every profile, [ingest] for recordings,
-                        [hooks] to run your own command on an event, [layouts] and [outro] for shorts,
-                        [queue] for the folder approved shorts go to
+                        [hooks] to run your own command on an event, [layouts], [outro] and [shorts] (how
+                        long you want them) for shorts, [queue] for the folder approved shorts go to
   profiles/short.toml   only the keys you change ([cut] max_pause = 0.3), or a whole new profile
   styles/short.md       your editorial rules for that profile (replaces the built-in guide)
   brand.toml            your fonts and colours

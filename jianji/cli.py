@@ -138,6 +138,11 @@ def compile_edit(p: Project, edit_arg: str | None, sources: dict) -> tuple[dict,
         outro = p.cfg.get("outro") or {}
         if p.profile in outro.get("profiles", ["short"]):  # your closing line, on the profiles you want it on
             tl = add_outro(tl, outro, p.cfg.get("texts"))
+        if p.short and p.cfg.get("shorts"):  # the length you want of a short cut out of a long video
+            from .compile import judge_length
+            off = judge_length(tl["stats"]["seconds"], p.cfg["shorts"])
+            if off:
+                tl["warnings"].append(f"length: {off[1]}" + (" (QA fails it)" if off[0] == "fail" else ""))
     except EditError as e:
         die(f"edit v{v:03d} rejected: {e}")
     write_json(p.path("renders", f"timeline.v{v:03d}.json"), tl)
@@ -217,6 +222,7 @@ def run_qa_cmd(p: Project, v: int, tl: dict | None = None, sources: dict | None 
         res = run_qa(tl, sources, outs, Engine(p.cfg["asr"], p.cfg["glossary"]), p.cfg["captions"], p.cfg["render"],
                      zone=p.cfg.get("safe_zone"), reuse=reuse, cut=p.cfg["cut"], vision=frames,
                      texts=p.cfg.get("texts"), shots=p.cfg.get("shots"), ocr=words_on_screen, hook=p.cfg.get("hook"),
+                     length=p.cfg.get("shorts") if p.short else None,
                      never=p.cfg.get("never_show"), allow=(p.cfg.get("stream") or {}).get("allow_emails"))
     loud = (outs or {}).get("loudnorm_input") or (reuse or {}).get("loudnorm")
     if loud:  # the mix's measured loudness: `jian resolve` gives every clip the same gain the master got
@@ -319,6 +325,12 @@ def status(p: Project):
         print("layouts: " + ("; ".join(f"{k} (top {v.get('top')}, bottom {v.get('bottom')}"
                                        f"{', ' + str(v['note']) if v.get('note') else ''})"
                                        for k, v in (p.cfg.get("layouts") or {}).items()) or "none defined"))
+    rule = p.cfg.get("shorts") or {}
+    if rule.get("length") or rule.get("min_length") or rule.get("max_length"):  # yours, for shorts out of this video
+        lo, hi = rule.get("length") or (0, 0)
+        print("short length: " + "; ".join(x for x in (
+            f"aim for {lo:g}-{hi:g} s" if hi else "", f"never under {rule['min_length']:g} s" if rule.get("min_length") else "",
+            f"never over {rule['max_length']:g} s" if rule.get("max_length") else "") if x))
     from .queue import look
     shorts = [f"{x.name} {(look(x) or {'state': 'empty'})['state']}" for x in sorted((p.out / "shorts").glob("*")) if x.is_dir()]
     if shorts:  # where each one stands: pending (waiting for your yes or no), failed (QA), approved, rejected...

@@ -40,6 +40,18 @@ start. The words you tend to start with ("so", "okay", your own) go in your laye
 preamble = ["so", "okay", "well", "you know"]
 ```
 
+Say how long you want them, and the editor builds each idea to that length (the setup, the point, a closing line)
+instead of stopping at the first sentence that works. Outside what you aim for is a warning (a short one can still
+be the best of the night); past your limits QA fails it, and the night repairs it or cuts another:
+
+```toml
+# ~/.config/jianji/config.toml
+[shorts]
+length = [35, 60]    # seconds you aim for
+min_length = 25      # never shorter
+max_length = 60      # never longer
+```
+
 Tell jian once where the camera and the code are in your scene, as regions of the recording, and the shorts stack
 them (camera over code); the editor zooms the bottom panel on the lines you're talking about:
 

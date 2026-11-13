@@ -127,6 +127,7 @@ second line is kept current.
 | `speech_cuts` | a speech cut lands mid-sentence (not marked `abrupt`) or keeps less air than its class's minimum (air: the voice gone, 10 dB under the speaker's level; a stream's room, with music and keys, never reaches the noise floor) |
 | `short_segments` | anything on screen under 1 s |
 | `hook` | a cut with `[hook]` (shorts) opens on speech with a run-up word first, a halting line in its first seconds, or another line than the edit's `"hook"` (a first sentence that lands late warns) |
+| `length` | a short cut out of a long video runs past your limits (`[shorts] min_length`, `max_length` in your config.toml); outside the `length` you aim for warns |
 | `text_faces`, `safe_zone` | burned text over a face more than 10% of its time; outside the platform safe zone (vertical) |
 | `text_readable`, `shot_readable` | a text up less than its reading time; a shot under its hold (warn) |
 | `privacy` | streams: a secret, an e-mail, a notification or a `never_show` word on screen (OCR every 2 s) or said aloud |
