@@ -114,7 +114,9 @@ A short is a small cut of its own in `<work folder>/shorts/<n>/`; number them fr
    list (section 2) under the next free number, until the number asked for is waiting or the list runs out. The user
    is better served by the third-best moment than by a queue that comes out short. `jian status <name>` shows where
    every short stands: `pending` is waiting for the user, `failed` didn't get through QA, `approved` and `rejected`
-   are theirs already (never touch those).
+   are theirs already (never touch those). A `rejected` short is a no to that cut, not always to its moment: bring
+   the moment back, as a new short, only when you can cut it differently in the way the brief or the user's rules ask
+   (longer, another opening); otherwise it is off your list.
 
 Asked to repair or to fill a queue that came out short (a second pass): start from `jian status <name>` and from
 `shorts.md`, not from zero.

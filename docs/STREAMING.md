@@ -85,5 +85,6 @@ keep it there while you work on the folder. Running `jian ingest` again on the s
 The night aims at a full queue (`night.sh <folder> 3`: three shorts, the default). A short that fails QA is repaired
 or another moment is cut in its place, and if fewer than asked for got through, the editor gets one more pass for
 just that. `jian status <folder>` shows where each short stands (`1 pending, 2 failed, 3 approved`). Run again on
-the same folder, the night cuts only what is missing: `NIGHT_RECAP=1 scripts/night.sh <folder>` the day after
-adds the recap and leaves the shorts alone.
+the same folder, the night cuts only what is missing: a short that waits or that you approved counts, one you
+rejected gets a replacement. `NIGHT_RECAP=1 scripts/night.sh <folder> 0` the day after adds the recap and cuts no
+shorts at all.

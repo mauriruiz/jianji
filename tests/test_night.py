@@ -129,10 +129,22 @@ def test_a_short_that_failed_qa_gets_a_second_pass_and_no_more(night):
 
 def test_a_second_night_cuts_only_what_is_missing(night):
     video, run = night
-    (video / "jianji" / "shorts.txt").write_text("1 approved, 2 rejected, 3 pending, 4 failed\n")  # three made it; you judged two
+    (video / "jianji" / "shorts.txt").write_text("1 approved, 2 pending, 3 pending, 4 failed\n")  # three made it; you took one
     r, calls, argv = run(NIGHT_RECAP="1")
     assert r.returncode == 0 and calls[3:] == ["jian status V", "claude in V", "jian queue --announce"]
     assert argv[1].startswith("\n# /jian-edit")  # just the recap
     assert "shorts: 3 already cut, 3 wanted: nothing to do" in (video / "jianji" / "night.log").read_text()
-    r, calls, argv = run("4", MAKES="1 approved, 2 rejected, 3 pending, 4 failed, 5 pending")
+    r, calls, argv = run("4", MAKES="1 approved, 2 pending, 3 pending, 4 failed, 5 pending")
     assert calls.count("claude in V") == 1 and "3 of the 4 shorts wanted are already there" in argv[1]
+
+
+def test_a_short_you_rejected_gets_a_replacement_and_zero_shorts_cuts_none(night):
+    video, run = night
+    (video / "jianji" / "shorts.txt").write_text("1 approved, 2 rejected, 3 pending\n")  # your no isn't a short you have
+    r, calls, argv = run(MAKES="1 approved, 2 rejected, 3 pending, 4 pending")
+    assert r.returncode == 0 and calls.count("claude in V") == 1
+    assert "2 of the 3 shorts wanted are already there" in argv[1] and "1 more at most" in argv[1]
+    (video / "jianji" / "shorts.txt").write_text("1 rejected, 2 rejected\n")  # you said no to all of them
+    r, calls, argv = run("0", NIGHT_RECAP="1")  # and want only the recap
+    assert r.returncode == 0 and calls[3:] == ["jian status V", "claude in V", "jian queue --announce"]
+    assert argv[1].startswith("\n# /jian-edit")
