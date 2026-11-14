@@ -99,7 +99,9 @@ line a short opens on, as said; compile and QA hold the cut to it.
 **Cuts.** A word's audible end is where its sound decays to the noise floor plus `tail_db`, or where the level climbs
 back by 8 dB (something new starts), at most 0.35 s past its aligned end. Every cut is classified by what it separates
 (inside a sentence, between sentences, between sections) and keeps that class's gap of real silence from the source;
-a speaker who runs straight on gets a little of the take's own room tone. Speech is cut only at a clause or sentence
+a speaker who runs straight on gets a little of the take's own room tone, under the picture going on (`[cut]
+max_room`; at 0 nothing is ever put between two pieces: each is the take itself, the air comes only from the pauses
+the take has, and where it has none the cut is straight). Speech is cut only at a clause or sentence
 end: a punctuated word followed by an audible pause. A clip that stops mid-sentence runs on to finish it (up to
 `finish_max`); `"abrupt"` is the only exception and is listed in review.md.
 
@@ -130,7 +132,7 @@ second line is kept current.
 | `duration`, `size`, `av_offset`, `av_sync`, `loudness`, `picture` | the render doesn't match the plan; A/V drift; loudness off target; black or frozen frames |
 | `clipped_words` | a word next to a cut scores clearly lower on the render than in the source (wav2vec2, aligned in context) and the cut-away side holds voice |
 | `fragments` | voice-level sound past the kept words at a cut *and* Whisper hears a word there that the edit doesn't have |
-| `speech_cuts` | a speech cut lands mid-sentence (not marked `abrupt`) or keeps less air than its class's minimum (air: the voice gone, 10 dB under the speaker's level; a stream's room, with music and keys, never reaches the noise floor) |
+| `speech_cuts` | a speech cut lands mid-sentence (not marked `abrupt`) or keeps less air than its class's minimum (air: the voice gone, 10 dB under the speaker's level; a stream's room, with music and keys, never reaches the noise floor). Not a failure: a cut that is straight because the take has no pause there and `max_room = 0` makes none up |
 | `short_segments` | anything on screen under 1 s |
 | `hook` | a cut with `[hook]` (shorts) opens on speech with a run-up word first, a halting line in its first seconds, or another line than the edit's `"hook"` (a first sentence that lands late warns) |
 | `length` | a short cut out of a long video runs past your limits (`[shorts] min_length`, `max_length` in your config.toml); outside the `length` you aim for warns |

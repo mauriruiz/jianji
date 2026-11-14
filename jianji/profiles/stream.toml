@@ -20,7 +20,8 @@ tail_margin = 0.04         # ...plus this
 onset_margin = 0.03        # in-points start this far before the first word's onset
 breath = 0.4               # an inhale this close before a sentence's first word is kept
 max_room = 0.35            # most room tone created where the speaker leaves no pause; a section that needs
-                           # more should get a B-roll beat (compile warns)
+                           # more should get a B-roll beat (compile warns). 0: none, ever: every piece is the
+                           # take itself, and a cut where it has no pause stays straight (QA lets it through)
 min_segment = 0.5          # words span (s) under which a filler or pause (<= 1 s) cut is undone: no slivers
 finish_max = 1.5           # a clip that stops mid-sentence runs on this far (s) to finish it ("eh", "vale" included)
 boundary_gap = 0.12        # a clause/sentence end counts only with this much audible pause after it (s)
