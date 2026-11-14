@@ -108,6 +108,12 @@ end: a punctuated word followed by an audible pause. A clip that stops mid-sente
 faces and the subject (Apple Vision, compiled once from `jianji/vision.swift`); placement may move a text, never
 shorten it.
 
+**Text looks.** `[captions]` and `[texts]` hold font, size, colours, outline and margins, as fractions of the frame
+height. Captions can sit centred on one line (`centre`) in a round box as wide as each cue (`box`, `box_radius`,
+`box_pad`). Callouts take any `[texts]` setting of their own in `[texts.hi]`; `stretch`, `spacing` and `line_spacing`
+shape the letters and the lines. `[texts.resolve]` is what the Resolve title gets where it should differ: Resolve
+strokes a title astride the edge of its letters, libass outside them, so the same look can need other numbers.
+
 **Render.** Video: one encoded piece per clip (VideoToolbox), cached, joined without re-encoding; a revision re-encodes
 only what changed. Audio: one continuous PCM mix with centered equal-power crossfades at every cut, two-pass loudnorm
 to the profile's loudness. Outputs per version: `master` (source quality), `review` (burned timecode, section and clip
@@ -199,6 +205,7 @@ Lowest to highest:
    - `styles/<name>.md`: your editorial rules (replace the built-in guide for that profile);
    - `brand.toml`: fonts and colours for every profile;
    - `glossary.txt`: names you say often, one per line;
+   - `fonts/`: font files for burned text (captions, texts), found by name without installing them;
    - `briefs/<profile>.md` or `briefs/default.md`: your brief template for `jian new`;
    - `extensions/<name>.toml`: settings for a series, pulled in by `extends: <name>` in a brief.
 3. **Per video**: `jianji/config.toml`, then brief.md front matter (`section.key: value`).

@@ -353,15 +353,54 @@ def _style(name: str, c: dict, h: int, fallback: dict) -> str:
     g = lambda k: c.get(k, fallback[k])
     back = g("back")
     box = back != "&H00000000"  # BorderStyle 3: an opaque box in the back colour instead of an outline
+    out = g("outline") * h
     return (f"Style: {name},{g('font')},{round(g('size') * h)},{g('colour')},&H00FFFFFF,"
-            f"{back if box else '&H00000000'},{back},{-1 if g('bold') else 0},0,0,0,100,100,0,0,{3 if box else 1},"
-            f"{max(1, round(g('outline') * h))},0,{g('align')},{round(g('margin_l') * h)},{round(g('margin_r') * h)},"
+            f"{back if box else '&H00000000'},{back},{-1 if g('bold') else 0},0,0,0,{round(g('stretch') * 100)},100,"
+            f"{g('spacing') * h:.3g},0,{3 if box else 1},"
+            f"{max(1, round(out)) if out else 0},0,{g('align')},{round(g('margin_l') * h)},{round(g('margin_r') * h)},"
             f"{round(g('margin_v') * h)},1")
 
 
 SCALE = {"chat": 0.8, "chapter": 1.6}  # text size of a chat or chapter card against a story line
 CAP = {"font": "Helvetica", "bold": False, "size": 1 / 18, "colour": "&H00FFFFFF", "back": "&H00000000",
-       "outline": 2 / 540, "align": 2, "margin_l": 20 / 540, "margin_r": 20 / 540, "margin_v": 1 / 20}
+       "outline": 2 / 540, "align": 2, "margin_l": 20 / 540, "margin_r": 20 / 540, "margin_v": 1 / 20,
+       "stretch": 1, "spacing": 0}
+# what sets a callout, a chat card and a chapter card apart from a story line, before your settings
+OWN = {"hi": {"colour": "&H00000000", "back": "&H0000D7FF", "align": 5, "margin_v": 0.27},
+       "chat": {"back": "&H50000000", "align": 8, "margin_v": 0.62},
+       "chapter": {"back": "&H30000000", "align": 8, "margin_v": 0.40}}
+
+
+def text_style(tc: dict | None, style: str) -> dict:
+    """The settings of one text style: [texts], then what that style changes: `hi_align`, `chat_margin_v`... or a
+    table of its own ([texts.hi]) with any [texts] setting. `hi_colour` is the callout's box."""
+    tc = tc or {}
+    own = {k[len(style) + 1:]: v for k, v in tc.items() if k.startswith(style + "_")}
+    if "colour" in own:
+        own["back"] = own.pop("colour")
+    own.update(tc.get(style) or {})
+    st = {**CAP, "bold": True, **tc, **OWN.get(style, {}), **own}
+    if "size" not in own:
+        st["size"] *= SCALE.get(style, 1)
+    return st
+
+
+def burn(ass: str, more: str = "") -> str:
+    """The libass filter for an .ass file next to the video. Fonts in <your layer>/fonts are found without
+    installing them."""
+    from . import core
+    fonts = core.HOME / "fonts"  # ponytail: a layer path with , : ' [ ] ; in it would need filtergraph escaping
+    return f"subtitles=filename={ass}{more}" + (f":fontsdir={fonts}" if fonts.is_dir() else "")
+
+
+def round_box(x0: float, y0: float, x1: float, y1: float, r: float) -> str:
+    """An ASS drawing: a box with round corners."""
+    r = min(r, (x1 - x0) / 2, (y1 - y0) / 2)
+    c = r * 0.45  # control points of a quarter circle
+    p = lambda *v: " ".join(f"{x:.0f}" for x in v)
+    return (f"m {p(x0 + r, y0)} l {p(x1 - r, y0)} b {p(x1 - c, y0, x1, y0 + c, x1, y0 + r)} l {p(x1, y1 - r)} "
+            f"b {p(x1, y1 - c, x1 - c, y1, x1 - r, y1)} l {p(x0 + r, y1)} b {p(x0 + c, y1, x0, y1 - c, x0, y1 - r)} "
+            f"l {p(x0, y0 + r)} b {p(x0, y0 + c, x0 + c, y0, x0 + r, y0)}")
 
 
 def _bgr(rgba: str) -> str:
@@ -390,27 +429,19 @@ def write_ass(cues, tl: dict, path: Path, height: int, cap_cfg: dict | None = No
     alt = {**(cap_cfg or {}), "align": 8, "margin_v": (cap_cfg or {}).get("alt_margin_v", 0.15)}
     titles = {s["id"]: s["title"] for s in tl["sections"]}
     tc = text_cfg or {}
-    txt = {**CAP, "bold": True, **tc}
-    hi = {**txt, "colour": "&H00000000", "back": tc.get("hi_colour", "&H0000D7FF"), "align": tc.get("hi_align", 5),
-          "margin_v": tc.get("hi_margin_v", txt.get("margin_v", CAP["margin_v"]))}
-    # streams: a chat question as a card in the lower third, a chapter card mid-frame; both white on a dark box
-    chat = {**txt, "size": txt["size"] * SCALE["chat"], "back": "&H50000000", "align": 8,
-            "margin_v": tc.get("chat_margin_v", 0.62)}
-    chapter = {**txt, "size": txt["size"] * SCALE["chapter"], "back": "&H30000000", "align": 8,
-               "margin_v": tc.get("chapter_margin_v", 0.40)}
+    cap = {**CAP, **(cap_cfg or {})}
+    look_of = {st: text_style(tc, st) for st in ("txt", "hi", "chat", "chapter")}
     lab = round(min(height / 30, w / 34))  # a vertical review is narrow: the label must not run into the timecode
     lines = [
-        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {height}", "WrapStyle: 0", "",
+        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {height}", "WrapStyle: 0",
+        "YCbCr Matrix: None", "",  # colours as written: left unsaid, libass bends them as if picked on BT.601 video
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, "
         "MarginV, Encoding",
         _style("Cap", cap_cfg or {}, height, CAP),
         _style("CapAlt", alt, height, CAP),
-        _style("Txt", txt, height, CAP),
-        _style("Hi", {k: v for k, v in hi.items() if not k.startswith("hi_")}, height, CAP),
-        _style("Chat", chat, height, CAP),
-        _style("Chapter", chapter, height, CAP),
+        *(_style(st.capitalize(), look_of[st], height, CAP) for st in look_of),
         f"Style: Lab,Menlo,{lab},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,3,"
         "4,0,9,12,12,10,1",
         f"Style: Lab2,Menlo,{lab},&H0080FFFF,&H00FFFFFF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,3,"
@@ -421,8 +452,34 @@ def write_ass(cues, tl: dict, path: Path, height: int, cap_cfg: dict | None = No
     ]
     esc = lambda s: s.replace("{", "(").replace("}", ")").replace("\n", "\\N").replace(NBSP, "\\h")
     lanes = place.get("lanes") or ["main"] * len(cues)
-    for (a, b, t), lane in zip(cues, lanes):
-        lines.append(f"Dialogue: 0,{_ass_t(a)},{_ass_t(b)},{'CapAlt' if lane == 'alt' else 'Cap'},,0,0,0,,{esc(t)}")
+    events = [f"Dialogue: 0,{_ass_t(a)},{_ass_t(b)},{'CapAlt' if lane == 'alt' else 'Cap'},,0,0,0,,{esc(t)}"
+              for (a, b, t), lane in zip(cues, lanes)]
+    centre, box = cap.get("centre"), cap.get("box")
+    if cues and (centre or box):
+        fs, cx = round(cap["size"] * height), (cap["margin_l"] * height + w - cap["margin_r"] * height) / 2
+        ink = {}
+        if box:  # as wide as libass sets each cue: measured, not guessed
+            # ponytail: measured as light ink on black, so dark letters get no box; measure on grey if anyone wants them
+            from .qa import text_boxes
+            path.write_text("\n".join(lines + events) + "\n")
+            ink = {round(a * 100): bx for _, a, _, bx, _ in text_boxes(path, [w, height])}
+        px, py = (v * height for v in cap.get("box_pad", (0.008, 0.003)))
+        for i, ((a, b, t), lane) in enumerate(zip(cues, lanes)):
+            n = t.count("\n") + 1
+            if lane == "alt":
+                top = alt["margin_v"] * height
+            elif centre:  # one- and two-line cues around the same line
+                top = centre * height - n * fs / 2
+                events[i] = events[i].replace(",0,0,0,,", f",0,0,0,,{{\\an5\\pos({cx:.0f},{centre * height:.0f})}}", 1)
+            else:
+                top = cap["margin_v"] * height if cap["align"] > 6 else height - cap["margin_v"] * height - n * fs
+            bx = ink.get(round(a * 100))
+            if bx:
+                half = max(cx - bx[0], bx[2] - cx) + px
+                shape = round_box(cx - half, top - py, cx + half, top + n * fs + py, cap.get("box_radius", 0) * height)
+                lines.append(f"Dialogue: 0,{_ass_t(a)},{_ass_t(b)},Cap,,0,0,0,,{{\\an7\\pos(0,0)\\fscx100\\bord0\\shad0"
+                             f"\\1c&H{box[4:]}&\\1a{box[:4]}&\\p1}}{shape}{{\\p0}}")
+    lines += events
     for t in tl.get("texts", []):
         body, a, b, pos = shown(t, glossary, tc), float(t["rec"] / F), float((t["rec"] + t["n"]) / F), ""
         pl = place.get("texts", {}).get(t["id"])
@@ -434,8 +491,13 @@ def write_ass(cues, tl: dict, path: Path, height: int, cap_cfg: dict | None = No
             pos = f"{{\\an8\\pos({pl['cx'] * k:.0f},{pl['top'] * k:.0f}){tags}}}"
         elif tags:
             pos = "{" + tags + "}"
+        body = esc(body)
+        st = look_of[t["style"]]
+        if st.get("line_spacing", 1) != 1:  # ASS has no line spacing: an unseen taller space opens each line
+            tall = (look["size"] * k if look.get("size") else round(st["size"] * height)) * st["line_spacing"]
+            body = "\\N".join(f"{{\\fs{tall:.0f}\\fscx1\\alpha&HFF&}}\\h{{\\r{tags}}}{x}" for x in body.split("\\N"))
         # own layer: libass shoves same-layer events apart, which once moved a callout under the captions
-        lines.append(f"Dialogue: 2,{_ass_t(a)},{_ass_t(b)},{t['style'].capitalize()},,0,0,0,,{pos}{esc(body)}")
+        lines.append(f"Dialogue: 2,{_ass_t(a)},{_ass_t(b)},{t['style'].capitalize()},,0,0,0,,{pos}{body}")
     W, H = tl["size"]
     for f in frames or []:  # faint boxes: faces (cyan), and the subject of shots without a face (magenta)
         a, b = max(0.0, f["t"] - 0.125), f["t"] + 0.125
@@ -533,11 +595,10 @@ def render(p: Project, tl: dict, cat: dict, sources: dict, v: int, reuse_master:
         busy = [(a, z, b, "cap") for a, z, b in caption_boxes(cues, lanes, cap, w, h, alt_mv)] if burned else []
         from .place import box
         texts = [{**t, "shown": shown(t, gl, tx or {})} for t in tl.get("texts", [])]
-        size = (tx or {}).get("size", CAP["size"]) * h
         hand = {t["id"]: {"cx": t["place"]["cx"], "top": t["place"]["top"], "a": float(t["rec"] / F),
                          "z": float((t["rec"] + t["n"]) / F), "slot": "yours", "face": 0, "subject": 0}
                for t in texts if t.get("place")}  # where you left it in Resolve
-        busy += [(x["a"], x["z"], box(t["shown"], x["cx"], x["top"], size), t["style"]) for t in texts
+        busy += [(x["a"], x["z"], box(t["shown"], x["cx"], x["top"], text_style(tx, t["style"])["size"] * h), t["style"]) for t in texts
                  for x in [hand.get(t["id"])] if x]
         placed, log = place_texts([t for t in texts if t["id"] not in hand], F, frames, {**CAP, **(tx or {})}, w, h,
                                   p.cfg.get("safe_zone"), busy, secs)
@@ -552,7 +613,7 @@ def render(p: Project, tl: dict, cat: dict, sources: dict, v: int, reuse_master:
               "fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=6:x=12:y=10")
         guide = safe_zone_box(p.cfg, w, h, rc["review_height"] / h)  # faint safe-zone frame, review only
         run([FFMPEG, "-v", "error", "-y", "-i", master.name, "-vf",
-             ",".join(filter(None, [f"scale=-2:{rc['review_height']}", f"subtitles={ass.name}", guide, tc])),
+             ",".join(filter(None, [f"scale=-2:{rc['review_height']}", burn(ass.name), guide, tc])),
              "-c:v", "h264_videotoolbox", "-b:v", "3M", "-c:a", "aac_at", "-b:a", "128k", review.name], cwd=d)
     outs = {"master": str(master), "review": str(review), "srt": str(srt), "loudnorm_input": loud, "placement": log}
     # the upload file, always: on-screen texts burned in; captions too where the profile burns them (shorts),
@@ -564,7 +625,7 @@ def render(p: Project, tl: dict, cat: dict, sources: dict, v: int, reuse_master:
                          place=place)
         rate = max(8, round(16 * w * h / (1080 * 1920)))  # 16 Mb/s at 1080x1920, scaled by pixels
         with p.timed("render_final", v=v):
-            run([FFMPEG, "-v", "error", "-y", "-i", master.name, "-vf", f"subtitles={fass.name}",
+            run([FFMPEG, "-v", "error", "-y", "-i", master.name, "-vf", burn(fass.name),
                  "-c:v", "h264_videotoolbox", "-b:v", f"{rate}M", "-pix_fmt", "yuv420p", "-c:a", "copy",
                  "-movflags", "+faststart", final.name], cwd=d)
         outs["final_ass"] = str(fass)

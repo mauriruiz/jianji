@@ -45,34 +45,41 @@ HEAVY = ("clipped_words", "asr_diff", "fragments")  # depend only on the master'
 
 
 def text_boxes(ass: Path, size: list[int]) -> list[tuple[str, float, float, tuple, str]]:
-    """Render each burned text event alone (captions, story texts and callouts in separate passes, so libass
-    neither merges nor shoves them) and measure its box: (style, start, end, (x0, y0, x1, y1) px, text)."""
+    """Render each burned text event alone (one per second of a blank clip, in one pass, so libass neither merges
+    nor shoves them) and measure its box: (style, start, end, (x0, y0, x1, y1) px, text). A caption's drawn box
+    counts as part of it."""
+    from .render import _ass_t, burn
     W, H = size
     s = 0.5
     cw, ch = round(W * s / 2) * 2, round(H * s / 2) * 2
-    head, events = [], {}
+    head, events, shapes = [], [], {}
     for line in ass.read_text().splitlines():
-        if line.startswith("Dialogue:"):
-            events.setdefault(line.split(",")[3], []).append(line)
-        else:
+        f = line.split(",", 9)
+        if not line.startswith("Dialogue:"):
             head.append(line)
+        elif "\\p1" in f[9]:  # a drawing says where it is
+            n = [float(x) for x in re.findall(r"-?[\d.]+", re.sub(r"\{[^}]*\}", "", f[9]))]
+            shapes[f[3], f[1]] = (min(n[0::2]), min(n[1::2]), max(n[0::2]), max(n[1::2]))
+        else:
+            events.append(f)
+    if not events:
+        return []
+    one = ass.with_name("_zone.ass")
+    one.write_text("\n".join(head + [",".join([f[0], _ass_t(i), _ass_t(i + 1), *f[3:]]) for i, f in enumerate(events)]) + "\n")
+    raw = run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", f"color=black:s={cw}x{ch}:r=1:d={len(events)}",
+               "-vf", burn(one.name), "-f", "rawvideo", "-pix_fmt", "gray", "-"], cwd=ass.parent).stdout
+    one.unlink()
+    frames = np.frombuffer(raw, np.uint8)[:len(events) * cw * ch].reshape(-1, ch, cw)
     out = []
-    for style, lines in events.items():
-        one = ass.with_name(f"_zone_{style}.ass")
-        one.write_text("\n".join(head + lines) + "\n")
-        for line in lines:
-            f = line.split(",", 9)
-            a, b = (sum(float(x) * m for x, m in zip(t.split(":"), (3600, 60, 1))) for t in (f[1], f[2]))
-            t = (a + b) / 2
-            raw = run([FFMPEG, "-v", "error", "-f", "lavfi", "-i", f"color=black:s={cw}x{ch}:r=10:d={t + 0.3:.2f}",
-                       "-vf", f"subtitles={one.name}", "-ss", f"{t:.2f}", "-frames:v", "1", "-f", "rawvideo",
-                       "-pix_fmt", "gray", "-"], cwd=ass.parent).stdout
-            img = np.frombuffer(raw, np.uint8)[:cw * ch].reshape(ch, cw)
-            ys, xs = np.nonzero(img > 60)
-            if len(xs):
-                box = (xs.min() / s, ys.min() / s, (xs.max() + 1) / s, (ys.max() + 1) / s)
-                out.append((style, a, b, box, re.sub(r"\{[^}]*\}", "", f[9]).replace("\\N", " ").replace("\\h", " ")))
-        one.unlink()
+    for f, img in zip(events, frames):
+        a, b = (sum(float(x) * m for x, m in zip(t.split(":"), (3600, 60, 1))) for t in (f[1], f[2]))
+        ys, xs = np.nonzero(img > 60)
+        if len(xs):
+            box = (xs.min() / s, ys.min() / s, (xs.max() + 1) / s, (ys.max() + 1) / s)
+            d = shapes.get((f[3], f[1]))
+            if d:
+                box = (min(box[0], d[0]), min(box[1], d[1]), max(box[2], d[2]), max(box[3], d[3]))
+            out.append((f[3], a, b, box, " ".join(re.sub(r"\{[^}]*\}", "", f[9]).replace("\\N", " ").replace("\\h", " ").split())))
     return out
 
 
