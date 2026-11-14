@@ -230,25 +230,10 @@ def run_qa(tl: dict, sources: dict, outs: dict, eng: Engine, cap_cfg: dict, rend
     if cut and "gap_sentence" in cut:  # every speech cut on a clause end, with breathing room measured on the render
         cur[0] = "speech_cuts"
         js = breathing(tl, sources, heard, cut)
-        mids = mid_sentence(tl, sources, cut)
-        tight = [j for j in js if j["tight"] and j["class"] != "intra"]
-        for j in tight:
-            if not j["why"]:
-                issue(j["cut"], "fail", f"cut without breathing room: {j['class']} gap {j['quiet']:.2f}s < "
-                      f"{j['min']:.2f}s ({j['last']!r} | {j['first']!r})")
-        for m in mids:
-            if not m["why"]:
-                issue(m["t"], "fail", f"speech cut mid-sentence after {m['word']!r} ({m['clip']}): end it on a clause "
-                      "or sentence end, or mark the clip \"abrupt\" with why")
-        bad = [x for x in tight + mids if not x["why"]]
-        med = {c: float(np.median([j["quiet"] for j in js if j["class"] == c])) for c in ("sentence", "section")
-               if any(j["class"] == c for j in js)}
-        check("speech_cuts", "fail" if bad else "pass",
-              f"{len(js)} cuts between speech: {sum(not m['why'] for m in mids)} end mid-sentence, "
-
-              f"{sum(not j['why'] for j in tight)} without breathing room, "
-              f"{len({x['why'] for x in tight + mids if x['why']})} kept tight on purpose (abrupt); median quiet "
-              + ", ".join(f"{c} {v:.2f}s" for c, v in med.items()))
+        bad, detail = speech_cut_issues(js, mid_sentence(tl, sources, cut))
+        for t, msg in bad:
+            issue(t, "fail", msg)
+        check("speech_cuts", "fail" if bad else "pass", detail)
     if length:  # a short out of a long video: as long as you want them, never past your limits
         cur[0] = "length"
         from .compile import judge_length
@@ -444,7 +429,7 @@ def joins(tl: dict, sources: dict) -> list[dict]:
                 just = tl.get("justified", {})
                 out.append({"piece": s["id"], "class": cls, "end": float(prev["rec"] / F) + wp["e"] - prev["in"],
                             "start": float(s["rec"] / F) + wn["s"] - s["in"], "cut": float(s["rec"] / F),
-                            "last": wp["t"], "first": wn["t"],
+                            "last": wp["t"], "first": wn["t"], "plan": s.get("join") or {},
                             "why": next((just[c] for c in (prev["clip"], *prev.get("also", [])) if c in just), None)})
         prev, between = s, False
     return out
@@ -526,8 +511,30 @@ def breathing(tl: dict, sources: dict, heard: np.ndarray, cut: dict) -> list[dic
         j["quiet"] = round(max(0.0, ons - dec), 3)
         j["min"] = G[j["class"]][0]
         j["tight"] = j["quiet"] < j["min"] - 0.03
+        # straight: the take has no pause there and none is made up (`[cut] max_room = 0`): as loose as it gets
+        plan = j.pop("plan")
+        j["straight"] = j["tight"] and not plan.get("room") and plan.get("kept", j["min"]) < j["min"]
         out.append(j)
     return out
+
+
+def speech_cut_issues(js: list[dict], mids: list[dict]) -> tuple[list[tuple[float, str]], str]:
+    """What fails among the cuts between speech (`breathing`) and the ends mid-sentence (`mid_sentence`), as
+    (time, message), and the check's line. A cut kept tight on purpose (abrupt) doesn't fail, nor one that is
+    straight because the take has no pause there and none is made up."""
+    tight = [j for j in js if j["tight"] and not j["straight"] and j["class"] != "intra"]
+    straight = sum(j["straight"] and j["class"] != "intra" for j in js)
+    bad = [(j["cut"], f"cut without breathing room: {j['class']} gap {j['quiet']:.2f}s < {j['min']:.2f}s "
+                      f"({j['last']!r} | {j['first']!r})") for j in tight if not j["why"]]
+    bad += [(m["t"], f"speech cut mid-sentence after {m['word']!r} ({m['clip']}): end it on a clause or sentence end, "
+                     "or mark the clip \"abrupt\" with why") for m in mids if not m["why"]]
+    med = {c: float(np.median([j["quiet"] for j in js if j["class"] == c])) for c in ("sentence", "section")
+           if any(j["class"] == c for j in js)}
+    return bad, (f"{len(js)} cuts between speech: {sum(not m['why'] for m in mids)} end mid-sentence, "
+                 f"{sum(not j['why'] for j in tight)} without breathing room, "
+                 f"{len({x['why'] for x in tight + mids if x['why']})} kept tight on purpose (abrupt)"
+                 + (f", {straight} straight where the take has no pause" if straight else "") + "; median quiet "
+                 + ", ".join(f"{c} {v:.2f}s" for c, v in med.items()))
 
 
 def summary(status: str, checks: list[dict]) -> str:

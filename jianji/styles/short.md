@@ -28,7 +28,8 @@ video stays in that video's `jianji/feedback.log`. Rules change only after you a
   of what it separates: ~0.12 s inside a sentence, ~0.30 s between sentences, ~0.55 s between sections
   (`[cut] gap_*`, scaled by `cut.breathing = tight | natural | relaxed`). Compile places it from the audio; your job is
   to cut where it can: end a clip on a sentence's last word, not mid-phrase into the next one.
-- Where the speaker runs straight on, compile adds a little room tone; a section change that needs more gets a
+- Where the speaker runs straight on, compile adds a little room tone (with `[cut] max_room = 0` it adds nothing
+  and the cut is straight: cut where the take pauses, or keep both sentences in one clip); a section change that needs more gets a
   B-roll beat from you (compile warns). After breathing room shifts timing, re-chain back-to-back B-roll (compile
   warns about a talking-head flash between shots).
 - **Speech cuts land on a clause or sentence end, never mid-sentence.** A pause inside a clause is never cut; the end of a clip counts only where the word is

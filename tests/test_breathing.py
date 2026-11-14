@@ -1,5 +1,6 @@
 """Breathing room on a real render of a speaker who never pauses (tests/fixtures/runon): the sentence boundary
-gets room tone, QA measures the gap on the render's audio, and without room tone QA calls the cut too tight."""
+gets room tone and QA measures the gap on the render's audio. With `max_room = 0` nothing is made up: every piece
+is the take itself, the cut stays as tight as the take is, and QA says so instead of failing it."""
 import json
 import shutil
 from fractions import Fraction
@@ -31,7 +32,7 @@ def _render(d: Path, cut: dict | None = None):
     cat, sources = load_sources(p, with_audio=True)
     tl, v = compile_edit(p, None, sources)
     outs = render(p, tl, cat, sources, v)
-    return p, tl, sources, decode(Path(outs["master"]))[:, 0]
+    return p, tl, sources, decode(Path(outs["master"]))[:, 0], outs
 
 
 @pytest.fixture(scope="module")
@@ -40,13 +41,13 @@ def with_room(tmp_path_factory):
 
 
 def test_room_tone_gives_the_sentence_its_gap(with_room):
-    p, tl, sources, heard = with_room
+    p, tl, sources, heard, _ = with_room
     (j,) = breathing(tl, sources, heard, p.cfg["cut"])
-    assert j["class"] == "sentence" and not j["tight"], j
+    assert j["class"] == "sentence" and not j["tight"] and not j["straight"], j
 
 
 def test_created_gap_is_room_tone_not_digital_silence(with_room):
-    p, tl, sources, heard = with_room
+    p, tl, sources, heard, _ = with_room
     F = Fraction(tl["fps"])
     (tone,) = [s for s in tl["segments"] if "tone" in s]
     a, b = float(tone["rec"] / F) + 0.03, float((tone["rec"] + tone["n"]) / F) - 0.03
@@ -55,11 +56,44 @@ def test_created_gap_is_room_tone_not_digital_silence(with_room):
     assert -75 < rms_db < -35, rms_db  # the clip's own room, well under the voice, never zero
 
 
-def test_without_room_tone_qa_calls_it_too_tight(tmp_path):
-    p, tl, sources, heard = _render(tmp_path / "noroom", {"max_room": 0})
-    assert not any("tone" in s for s in tl["segments"])
+@pytest.fixture(scope="module")
+def bare(tmp_path_factory):
+    return _render(tmp_path_factory.mktemp("bare"), {"max_room": 0})
+
+
+def test_without_room_tone_every_piece_is_the_take_itself(bare):
+    """`max_room = 0`: no piece is put in between two cuts, in the timeline or in what Resolve gets: each one holds
+    words of the take, runs on in the source, and shows no frame the piece before it showed."""
+    from jianji.resolve import plan
+    p, tl, sources, heard, _ = bare
+    F = Fraction(tl["fps"])
+    segs = tl["segments"]
+    assert len(segs) == 2 and sum(s["n"] for s in segs) == tl["frames"]
+    assert all(s["kept"] and "tone" not in s for s in segs), segs
+    assert all(not (a["src"] == b["src"] and a["in"] <= b["in"] < a["in"] + a["n"] / F) for a, b in zip(segs, segs[1:]))
+    assert "room" not in tl["stats"]
+    items = plan(p, 1)["items"]
+    assert sorted(i["track"] for i in items) == ["A1", "A1", "V1", "V1"], items  # no room-tone track, no extra clip
+    assert [(i["start"], i["end"]) for i in items if i["track"] == "V1"] == [(s["rec"], s["rec"] + s["n"]) for s in segs]
+
+
+def test_a_cut_the_take_gives_no_pause_for_is_straight_not_too_tight(bare):
+    p, tl, sources, heard, _ = bare
     (j,) = breathing(tl, sources, heard, p.cfg["cut"])
-    assert j["tight"] and j["quiet"] < 0.1, j
+    assert j["tight"] and j["quiet"] < 0.1 and j["straight"], j
+    tl2 = {**tl, "segments": [{**s, "join": {**s["join"], "kept": 0.3}} if "join" in s else s for s in tl["segments"]]}
+    (j,) = breathing(tl2, sources, heard, p.cfg["cut"])
+    assert j["tight"] and not j["straight"], j  # the plan kept a pause and the render lost it: still a failure
+
+
+def test_qa_passes_a_straight_cut_and_fails_a_lost_pause(bare):
+    from jianji.qa import speech_cut_issues
+    p, tl, sources, heard, _ = bare
+    (j,) = breathing(tl, sources, heard, p.cfg["cut"])
+    bad, detail = speech_cut_issues([j], [])
+    assert not bad and "0 without breathing room" in detail and "1 straight where the take has no pause" in detail
+    bad, detail = speech_cut_issues([{**j, "straight": False}], [])
+    assert len(bad) == 1 and "cut without breathing room: sentence gap" in bad[0][1] and "straight" not in detail
 
 
 def test_a_pause_in_a_noisy_room_is_still_a_pause():

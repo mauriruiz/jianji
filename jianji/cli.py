@@ -470,14 +470,15 @@ def cut_reel(p: Project, v: int | None):
     parts = []
     for k, j in enumerate(js, 1):
         a = max(0.0, j["end"] - 1.5)
+        j["note"] = "  no pause in the take" if j["straight"] else "  TOO TIGHT" if j["tight"] else ""
         parts.append((a, j["start"] + 1.5 - a, f"{k}/{len(js)}  {j['class']}  {j['quiet']:.2f}s (min {j['min']:.2f})"
-                      + ("  TOO TIGHT" if j["tight"] else "")))
+                      + j["note"]))
     out = d / f"cuts.v{v:03d}.mp4"
     _reel(p, master, parts, out, tl["size"])
-    tight = [j for j in js if j["tight"]]
+    tight = [j for j in js if j["tight"] and not j["straight"]]
     print(f"{out}\n{len(js)} cuts, {len(tight)} too tight")
     for k, j in enumerate(js, 1):
-        print(f"  {k:3d}  {j['class']:8} gap {j['quiet']:.2f}s{'  TOO TIGHT' if j['tight'] else ''}  "
+        print(f"  {k:3d}  {j['class']:8} gap {j['quiet']:.2f}s{j['note']}  "
               f"{j['last']!r} | {j['first']!r}")
 
 

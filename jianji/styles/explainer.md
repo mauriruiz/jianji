@@ -27,7 +27,8 @@ video stays in that video's `jianji/feedback.log`. Rules change only after you a
   they are, longer ones shorten to their class. `cut.breathing = tight | natural | relaxed` scales it all. Compile
   takes the silence from the audio (last word decays, next one's onset and inhale kept); plan cuts at sentence ends
   so it can. Don't add cuts just to remove breaths.
-- A speaker who runs straight on gets a little room tone at sentence breaks; a section change that needs more gets
+- A speaker who runs straight on gets a little room tone at sentence breaks (none with `[cut] max_room = 0`: the
+  cut is straight, so cut where the take pauses); a section change that needs more gets
   a B-roll beat (compile warns). `jian cuts <name>` plays every join with 1.5 s each side: audit it.
 - Jump cuts inside one take are acceptable in explainers.
 - **Speech cuts land on a clause or sentence end, never mid-sentence.** A pause inside a clause is never cut; the end of a clip counts only where the word is
